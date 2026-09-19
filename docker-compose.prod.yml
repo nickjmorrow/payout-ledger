@@ -1,0 +1,114 @@
+# The PRODUCTION stack. `docker-compose.yml` is the development one.
+#
+#   docker compose -f docker-compose.prod.yml up --build -d
+#
+# What differs, and why each one matters:
+#
+#   * The frontend is a BUILT BUNDLE served by nginx, not a dev server. nginx
+#     also proxies /api to the backend, which is what reproduces Vite's dev
+#     proxy — without it the bundle has no route to the API at all, because the
+#     client calls /api on its own origin by design.
+#   * No source mounts. The image is the artifact; a bind mount would mean the
+#     thing you tested is not the thing that runs.
+#   * No hot reload, and the backend runs as an unprivileged user.
+#   * restart: unless-stopped everywhere, so a crash or a reboot recovers.
+#   * Healthchecks on everything, including the worker, which has no HTTP port
+#     and so proves liveness by touching a file once per loop pass.
+#
+# Still missing, deliberately, because they depend on where you deploy: TLS
+# (terminate it at your platform's load balancer or put Caddy in front),
+# secrets management, log shipping, and backups.
+name: ledger-prod
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER_is_required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_is_required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB_is_required}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Deliberately NOT published. Nothing outside this network needs it, and the
+    # development stack exposing 5433 is a convenience, not a pattern to copy.
+
+  # Runs to completion before anything else starts. A failed migration stops the
+  # deploy here rather than leaving a half-started app pointed at the wrong
+  # schema.
+  migrate:
+    build:
+      context: ./backend
+      target: production
+    restart: 'no'
+    command: ['alembic', 'upgrade', 'head']
+    environment:
+      DATABASE_URL: &database_url >-
+        postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      LOG_FORMAT: json
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ./backend
+      target: production
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: *database_url
+      # The API never talks to the model — only the worker does — so it does not
+      # need a key. Keeping it out of this environment is not tidiness: it is
+      # one fewer process that can leak one.
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+      CORS_ORIGINS: ${PUBLIC_ORIGIN:-http://localhost}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: ./backend
+      target: production
+    restart: unless-stopped
+    command: ['python', '-m', 'app.worker']
+    environment:
+      DATABASE_URL: *database_url
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+    healthcheck:
+      # "Did a loop pass finish in the last two minutes." A process-liveness
+      # check would be theatre — Docker restarts a process that exits anyway —
+      # and this catches the case that actually needs catching: alive but stuck.
+      test: ['CMD-SHELL', 'find /tmp/worker-alive -mmin -2 | grep -q .']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: ./frontend
+      target: production
+    restart: unless-stopped
+    ports:
+      - '${PUBLIC_PORT:-80}:80'
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  db_data:
