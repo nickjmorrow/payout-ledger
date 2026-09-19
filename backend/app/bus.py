@@ -116,18 +116,24 @@ class Bus:
 
 
 async def publish(session: AsyncSession, channel: str, frame: dict[str, Any]) -> None:
-    """Send one frame to everyone listening on `channel`.
+    """Send one frame to everyone listening on `channel`. **Does not commit.**
 
     Publishing goes through the ordinary session rather than the bus's own
-    connection: NOTIFY is transactional, so this is delivered when the
-    surrounding transaction commits and never announces something a reader
-    cannot yet see.
+    connection, and that is what makes it safe: **NOTIFY is transactional.**
+    Postgres holds the notification until the surrounding transaction commits
+    and discards it on rollback, so this can never announce something a reader
+    cannot yet see — and cannot announce something that never happened.
+
+    That property is the reason this does not commit, which it used to. The
+    caller decides when the transaction ends, so a notification and the rows it
+    refers to land together or not at all. Commit here and you get the opposite:
+    a listener woken about a row that is still invisible, or worse, still
+    hypothetical.
     """
     await session.execute(
         text("select pg_notify(:channel, :payload)"),
         {"channel": channel, "payload": json.dumps(frame)},
     )
-    await session.commit()
 
 
 # One per process. Started and stopped by the app lifespan in main.py, and by

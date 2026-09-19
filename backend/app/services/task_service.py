@@ -102,6 +102,20 @@ async def enqueue(
     run_at: datetime | None = None,
     request_id: str | None = None,
 ) -> Task:
+    """Put work on the queue. **Does not commit — this is the outbox.**
+
+    Enqueueing is almost never the only thing a request does. A disbursement
+    writes a transfer, posts a journal, records an idempotency key, *and* asks
+    for the payment to be sent; all four have to land together. If this
+    committed, the task would be durable before the rows describing it were,
+    and a crash in that window leaves a worker holding a job whose subject does
+    not exist.
+
+    Writing the job into a table inside the caller's transaction is the outbox
+    pattern, and here it needs no extra machinery because the queue already
+    *is* a table. The NOTIFY below is transactional too, so the worker is woken
+    at the same commit and never before it. See AGENTS.md > The outbox.
+    """
     task = Task(
         kind=kind,
         payload=payload or {},
@@ -109,8 +123,9 @@ async def enqueue(
         **({"run_at": run_at} if run_at is not None else {}),
     )
     session.add(task)
-    await session.commit()
-    await session.refresh(task)
+    # Flushed, not committed: the row needs an id for the log line and for the
+    # caller to reference, but the transaction stays open.
+    await session.flush()
 
     # Only worth waking a worker for something it can claim right now.
     if run_at is None:

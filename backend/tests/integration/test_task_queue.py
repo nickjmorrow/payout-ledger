@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import text
 
+from app.bus import bus
 from app.db import SessionFactory
 from app.services import task_service
 
@@ -29,6 +30,7 @@ async def test_two_open_transactions_claim_different_rows(session):
     """
     first = await task_service.enqueue(session, kind="noop")
     second = await task_service.enqueue(session, kind="noop")
+    await session.commit()
 
     async with SessionFactory() as s1, SessionFactory() as s2:
         claimed_a = (await s1.execute(task_service._CLAIM, {"worker_id": "w1"})).scalar()
@@ -51,9 +53,10 @@ async def test_a_task_scheduled_for_later_is_invisible_to_a_claim(session):
     """`run_at` is the entire scheduling mechanism."""
     await task_service.enqueue(
         session,
-        kind="agent_run",
+        kind="noop",
         run_at=datetime.now(UTC) + timedelta(hours=1),
     )
+    await session.commit()
     assert await task_service.claim_next(session, worker_id="w") is None
 
 
@@ -64,6 +67,7 @@ async def test_sweep_requeues_an_abandoned_task_then_fails_it_at_max_attempts(se
     leaves a row marked `running` forever.
     """
     task = await task_service.enqueue(session, kind="noop")
+    await session.commit()
     await session.execute(
         text(
             "update tasks set status='running', attempts=1, claimed_at=now() - interval '1 hour'"
@@ -103,6 +107,7 @@ def test_retry_backoff_doubles_and_caps(attempts: int, expected: float):
 
 async def test_release_returns_a_claimed_task_without_counting_it_as_failed(session):
     task = await task_service.enqueue(session, kind="noop")
+    await session.commit()
     claimed = await task_service.claim_next(session, worker_id="w1")
     assert claimed is not None
     assert claimed.attempts == 1
@@ -171,3 +176,48 @@ async def test_a_pending_task_is_cancelled_outright(session):
     await task_service.request_cancel(session, task=task)
     assert task.status == "cancelled"
     assert await task_service.claim_next(session, worker_id="w") is None
+
+
+async def test_enqueue_joins_the_caller_transaction_rather_than_ending_it(session):
+    """The outbox property: no task outlives the work that asked for it.
+
+    A disbursement writes a transfer, posts a journal, records an idempotency
+    key and enqueues the payment. If enqueue committed, the job would be
+    durable before the rows describing it were, and a crash in that window
+    leaves a worker holding a job whose subject does not exist.
+
+    Rolling back must therefore take the task with it. This test is the guard
+    on that, and it is the one that fails if somebody "fixes" the missing
+    commit in enqueue.
+    """
+    await task_service.enqueue(session, kind="noop")
+    await session.rollback()
+
+    remaining = await session.execute(text("select count(*) from tasks"))
+    assert remaining.scalar_one() == 0
+
+
+async def test_the_wake_notification_is_held_until_commit(session):
+    """NOTIFY is transactional, which is why publishing before commit is safe.
+
+    A listener must never be woken about a task that is still invisible, or
+    still hypothetical. Postgres holds the notification until COMMIT and
+    discards it on ROLLBACK — this asserts the discard half, which is the half
+    that would otherwise wake a worker about a job that never existed.
+    """
+    await bus.start()
+    try:
+        async with bus.subscribe(task_service.WAKE_CHANNEL) as woken:
+            await task_service.enqueue(session, kind="noop")
+            await session.rollback()
+
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(woken.get(), timeout=0.5)
+
+            # And the committing case does deliver, so the test above is not
+            # passing because notifications are simply broken.
+            await task_service.enqueue(session, kind="noop")
+            await session.commit()
+            assert await asyncio.wait_for(woken.get(), timeout=5.0) is not None
+    finally:
+        await bus.stop()
