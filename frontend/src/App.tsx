@@ -1,40 +1,56 @@
-import { useQuery } from '@tanstack/react-query';
-import { getHealth } from 'src/api/health';
 import Column from 'src/components/Column';
+import DisburseForm from 'src/components/DisburseForm';
+import FindingList from 'src/components/FindingList';
+import Overview from 'src/components/Overview';
 import ThemeToggle from 'src/components/ThemeToggle';
+import TransferList from 'src/components/TransferList';
 
 /**
- * The shell, until there is something to put in it.
+ * The disbursement console.
  *
- * What was here — a conversation list, a router, a transcript — belonged to the
- * chat app this was forked from and left with it. The health read below is not
- * a placeholder for its own sake: it exercises the whole path end to end (the
- * Vite proxy, nginx in production, the response envelope, a database round
- * trip), so a broken seam shows up here rather than inside the first real
- * feature built on it.
+ * One page on purpose. The whole job is: see what the programme has, send some
+ * of it to somebody, watch it land, and be told when the books and the
+ * provider stop agreeing. Splitting that across routes would mean an operator
+ * had to know where to look for a problem, when the point is to be shown it.
  */
 export default function App() {
-  const { data, error } = useQuery({
-    queryFn: () => getHealth(),
-    queryKey: ['health'],
-  });
-
   return (
-    <div className={'flex h-full flex-col'}>
+    <div className={'flex h-full flex-col overflow-y-auto'}>
       <header className={'border-b border-ink/5'}>
         <Column className={'flex items-center justify-between py-4'}>
-          <h1 className={'text-sm font-medium tracking-tight text-ink'}>Ledger</h1>
+          <div>
+            <h1 className={'text-sm font-medium tracking-tight text-ink'}>
+              {'Unconditional cash transfers'}
+            </h1>
+            <p className={'text-xs text-ink-muted'}>{'Disbursement console'}</p>
+          </div>
           <ThemeToggle />
         </Column>
       </header>
 
-      <Column className={'flex flex-1 flex-col justify-center gap-2'}>
-        <p className={'text-sm text-ink'}>
-          {error ? 'Could not reach the server.' : `API ${data?.status ?? '…'}`}
-        </p>
-        <p className={'text-xs text-ink-muted'}>
-          {error ? error.message : `Database ${data?.database ?? '…'}`}
-        </p>
+      <Column className={'flex flex-col gap-8 py-8'}>
+        <Overview />
+
+        <section className={'flex flex-col gap-3'}>
+          <h2 className={'text-xs font-medium tracking-wide text-ink-muted uppercase'}>
+            {'New disbursement'}
+          </h2>
+          <DisburseForm />
+        </section>
+
+        <section className={'flex flex-col gap-3'}>
+          <h2 className={'text-xs font-medium tracking-wide text-ink-muted uppercase'}>
+            {'Disbursements'}
+          </h2>
+          <TransferList />
+        </section>
+
+        <section className={'flex flex-col gap-3'}>
+          <h2 className={'text-xs font-medium tracking-wide text-ink-muted uppercase'}>
+            {'Reconciliation'}
+          </h2>
+          <FindingList />
+        </section>
       </Column>
     </div>
   );
