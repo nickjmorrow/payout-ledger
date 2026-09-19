@@ -1,7 +1,13 @@
-# Secrets — never commit
-.env
-.env.local
-.env.*.local
+# Secrets — never commit.
+#
+# Deny every .env* and then allow back the two examples, rather than listing
+# the ones to ignore. The old list named `.env`, `.env.local` and
+# `.env.*.local` — which did not cover `.env.prod`, the file
+# `.env.prod.example` tells you to create and fill with a database password.
+# A deny-list of secret files is only ever one filename away from leaking one.
+.env*
+!.env.example
+!.env.prod.example
 
 # Python
 __pycache__/

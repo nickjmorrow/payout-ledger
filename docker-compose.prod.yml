@@ -14,6 +14,9 @@
 #   * restart: unless-stopped everywhere, so a crash or a reboot recovers.
 #   * Healthchecks on everything, including the worker, which has no HTTP port
 #     and so proves liveness by touching a file once per loop pass.
+#   * The migrate step also seeds the chart of accounts, which is required
+#     setup rather than sample data — but NOT the demo recipients or the
+#     opening balance, which default off here and on in development.
 #
 # Still missing, deliberately, because they depend on where you deploy: TLS
 # (terminate it at your platform's load balancer or put Caddy in front),
@@ -41,15 +44,26 @@ services:
   # Runs to completion before anything else starts. A failed migration stops the
   # deploy here rather than leaving a half-started app pointed at the wrong
   # schema.
+  #
+  # Seeds as well as migrates, and the seeding is not optional: the chart of
+  # accounts (a programme funding account and a provider settlement account) has
+  # to exist before any transfer can be authorised, so a stack that skipped it
+  # would start cleanly and then refuse every disbursement. The seeder is
+  # idempotent, so running it on every deploy is a no-op after the first.
+  #
+  # SEED_DEMO_DATA defaults to FALSE here and true in development. Sample
+  # recipients and a two-million-shilling opening balance are exactly what you
+  # want in a demo and exactly what you do not want on a real deployment.
   migrate:
     build:
       context: ./backend
       target: production
     restart: 'no'
-    command: ['alembic', 'upgrade', 'head']
+    command: ['sh', '-c', 'alembic upgrade head && python -m app.seed']
     environment:
       DATABASE_URL: &database_url >-
         postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
       LOG_FORMAT: json
     depends_on:
       db:
@@ -62,9 +76,6 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: *database_url
-      # The API never talks to the model — only the worker does — so it does not
-      # need a key. Keeping it out of this environment is not tidiness: it is
-      # one fewer process that can leak one.
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: json
       CORS_ORIGINS: ${PUBLIC_ORIGIN:-http://localhost}
