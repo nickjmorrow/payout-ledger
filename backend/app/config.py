@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     # 422 the client can show, long before any money moves.
     max_transfer_minor: int = 1_000_000_00
 
+    # How often the reconciliation pass runs. Short here because the demo
+    # should visibly self-heal; a real deployment would measure this in minutes
+    # and the window it scans in days.
+    reconcile_interval_seconds: int = 30
+
     # ------------------------------------------------------------- provider
     #
     # The mock provider's behaviour. All three failure hooks default to off:

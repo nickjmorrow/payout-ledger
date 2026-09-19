@@ -40,7 +40,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[2]
 # leaves rows behind silently poisons the next one.
 TABLES = (
     "tasks, recipients, accounts, transfers, journal_entries, ledger_entries,"
-    " idempotency_keys, provider_payments"
+    " idempotency_keys, provider_payments, reconciliation_findings"
 )
 
 

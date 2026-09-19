@@ -474,3 +474,49 @@ class ProviderPayment(Base):
         # Reconciliation sweeps by time, so this is the index it runs on.
         Index("provider_payments_created_idx", desc("created_at")),
     )
+
+
+class ReconciliationFinding(Base):
+    """A disagreement between our books and the provider's records.
+
+    Written by the reconciliation pass and never by anything else. A finding is
+    a *fact about a moment* — it is not updated when the underlying problem is
+    fixed, because the point of keeping it is to be able to answer "what did we
+    know, and when" long after the fix. A later pass that finds the same
+    problem writes another row; a later pass that does not simply writes
+    nothing, and the absence is the record of the resolution.
+
+    `kind` says which way the disagreement runs, and they are not
+    interchangeable — see `services/reconciliation_service` for what each one
+    means and why only two of them are safe to heal automatically.
+    """
+
+    __tablename__ = "reconciliation_findings"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    transfer_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("transfers.id", ondelete="SET NULL"), nullable=True
+    )
+    provider_reference: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # What a person needs in order to decide what to do. Written for whoever is
+    # reading it at 3am with no other context.
+    detail: Mapped[str] = mapped_column(Text, nullable=False)
+    # True when the pass repaired it rather than only reporting it.
+    healed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "kind in ('missing_at_provider', 'unknown_to_us', 'status_behind',"
+            " 'status_contradicted', 'amount_mismatch')",
+            name="reconciliation_findings_kind_check",
+        ),
+        Index("reconciliation_findings_created_idx", desc("created_at")),
+    )

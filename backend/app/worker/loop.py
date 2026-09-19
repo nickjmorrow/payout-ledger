@@ -23,7 +23,7 @@ from app.config import settings
 from app.db import SessionFactory, engine
 from app.logging import configure_logging, get_logger
 from app.services import task_service
-from app.worker import disburse, shutdown
+from app.worker import disburse, reconcile, shutdown
 from app.worker.handlers import HANDLERS, execute
 
 logger = get_logger(__name__)
@@ -36,7 +36,7 @@ logger = get_logger(__name__)
 # Named in a tuple rather than left as a bare side-effect import so that the
 # reference is real: an unused import is exactly the kind of thing a linter,
 # an editor, or a tidy-minded person deletes.
-HANDLER_MODULES = (disburse,)
+HANDLER_MODULES = (disburse, reconcile)
 
 
 async def drain(worker_id: str) -> int:
@@ -60,6 +60,10 @@ async def tick(worker_id: str) -> int:
     """
     async with SessionFactory() as session:
         await task_service.sweep_stale(session)
+        # Idempotent, and cheap: a count of pending rows. Here rather than at
+        # startup only, so a queue drained of its reconcile chain — by a bug,
+        # or by somebody clearing the table — starts one again by itself.
+        await reconcile.ensure_scheduled(session)
     return await drain(worker_id)
 
 
