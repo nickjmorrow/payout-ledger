@@ -52,6 +52,12 @@ class Settings(BaseSettings):
     task_retry_base_seconds: float = 5.0
     task_retry_max_seconds: float = 120.0
 
+    # A ceiling on one disbursement, in minor units. Unbounded input is an
+    # unbounded payment, and the number that matters is the one picked on
+    # purpose rather than the one the provider happens to accept. Refused as a
+    # 422 the client can show, long before any money moves.
+    max_transfer_minor: int = 1_000_000_00
+
     # ------------------------------------------------------------- provider
     #
     # The mock provider's behaviour. All three failure hooks default to off:

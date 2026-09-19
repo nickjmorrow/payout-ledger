@@ -230,6 +230,18 @@ class Account(Base):
             unique=True,
             postgresql_where=text("recipient_id is not null"),
         ),
+        # Exactly one funding account and one settlement account per currency.
+        # Without this `ledger_service.system_account` is ill-defined — it would
+        # have to pick one of several and would pick a different one depending
+        # on the plan, which is the kind of bug that only shows up once the
+        # books are already wrong.
+        Index(
+            "accounts_system_kind_currency_idx",
+            "kind",
+            "currency",
+            unique=True,
+            postgresql_where=text("recipient_id is null"),
+        ),
     )
 
 

@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from sqlalchemy import ColumnElement, case, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.logging import get_logger
@@ -212,3 +213,97 @@ async def trial_balance(session: AsyncSession) -> int:
         )
     )
     return int(result.scalar_one())
+
+
+async def system_account(session: AsyncSession, *, kind: str, currency: str) -> Account:
+    """The one funding or settlement account for a currency.
+
+    "The one" is guaranteed by a partial unique index rather than by
+    convention, so this cannot quietly start picking a different account
+    depending on the query plan.
+    """
+    if kind == "recipient_payable":
+        raise LedgerError("recipient_payable accounts belong to a recipient; use payable_account")
+
+    result = await session.execute(
+        select(Account).where(Account.kind == kind, Account.currency == currency)
+    )
+    account = result.scalar_one_or_none()
+    if account is None:
+        raise LedgerError(
+            f"no {kind} account for {currency}; the chart of accounts has not been seeded"
+        )
+    return account
+
+
+async def payable_account(
+    session: AsyncSession, *, recipient_id: uuid.UUID, currency: str
+) -> Account:
+    """This recipient's payable account, creating it on first use.
+
+    Created lazily rather than at enrolment because an account with no entries
+    is indistinguishable from one that does not exist — the balance of both is
+    zero — so there is nothing to gain by making it earlier.
+
+    **The insert is `ON CONFLICT DO NOTHING`, not a read followed by a write.**
+    Two requests for the same recipient can reach this at the same moment, and
+    the read-then-write version has both see nothing and both insert, so one
+    gets a unique violation and its whole transfer fails. That is not
+    hypothetical: it is what this function did until a concurrency test found
+    it, and it looked safe only because the funding lock in
+    `transfer_service.initiate` happened to serialise every caller. Relying on
+    a lock taken somewhere else for a different reason is not a guarantee.
+    """
+    values = {
+        "name": f"Payable {recipient_id}",
+        "kind": "recipient_payable",
+        "currency": currency,
+        "recipient_id": recipient_id,
+    }
+    await session.execute(
+        pg_insert(Account)
+        .values(**values)
+        # `index_where` is required, not decorative: the unique index is
+        # partial (`where recipient_id is not null`, so that system accounts
+        # with a null recipient do not all collide), and Postgres will not
+        # match a partial index unless the predicate is restated here.
+        .on_conflict_do_nothing(
+            index_elements=["recipient_id", "currency"],
+            index_where=Account.recipient_id.isnot(None),
+        )
+    )
+
+    # Selected afterwards rather than RETURNINGed, because DO NOTHING returns
+    # no row when the conflict happened — which is exactly the case that needs
+    # an answer.
+    result = await session.execute(
+        select(Account).where(
+            Account.recipient_id == recipient_id,
+            Account.currency == currency,
+        )
+    )
+    return result.scalar_one()
+
+
+async def lock_account(session: AsyncSession, *, account_id: uuid.UUID) -> None:
+    """Serialise this transaction against others touching the same account.
+
+    **The lock is not protecting the account row's data — nothing here updates
+    it.** It is being used as a mutex, and the row is simply the agreed place
+    to take it.
+
+    The problem it solves is write skew. Two concurrent transfers both read the
+    funding balance, both see enough, and both post — and the fund ends up
+    overdrawn even though neither transaction did anything wrong on its own.
+    No constraint catches this, because each journal balances perfectly; the
+    books are consistent and the programme has still promised money it does not
+    have.
+
+    Reading the balance under `FOR UPDATE` on the account fixes it because both
+    transactions must take the same row lock *before* reading. The second
+    blocks until the first commits and then reads a balance that includes the
+    first transfer. A `SELECT` on `ledger_entries` alone cannot do this: the
+    rows the other transaction is about to write do not exist yet, so there is
+    nothing there to lock.
+    """
+    await session.execute(select(Account.id).where(Account.id == account_id).with_for_update())
