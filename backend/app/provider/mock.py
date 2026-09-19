@@ -162,7 +162,6 @@ class MockProvider:
                     row.failure_reason = "recipient wallet unreachable"
                 else:
                     row.status = "succeeded"
-                row.updated_at = datetime.now(UTC)
             await session.commit()
 
         if rows:

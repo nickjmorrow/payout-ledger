@@ -307,3 +307,17 @@ async def lock_account(session: AsyncSession, *, account_id: uuid.UUID) -> None:
     nothing there to lock.
     """
     await session.execute(select(Account.id).where(Account.id == account_id).with_for_update())
+
+
+async def system_accounts(session: AsyncSession) -> list[Account]:
+    """Every account that is not a recipient's payable, in a stable order.
+
+    The programme-level view: the fund and the float. Recipient payables are
+    excluded because there is one per recipient and they are individually
+    uninteresting — what matters about them is the total, which is the
+    difference between the two accounts here.
+    """
+    result = await session.execute(
+        select(Account).where(Account.recipient_id.is_(None)).order_by(Account.kind)
+    )
+    return list(result.scalars())

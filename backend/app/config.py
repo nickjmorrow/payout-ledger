@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     # 422 the client can show, long before any money moves.
     max_transfer_minor: int = 1_000_000_00
 
+    # Whether to seed demo recipients and an opening balance. The chart of
+    # accounts is seeded regardless — no transfer can be authorised without it,
+    # so that part is setup rather than sample data.
+    seed_demo_data: bool = True
+
     # How often the reconciliation pass runs. Short here because the demo
     # should visibly self-heal; a real deployment would measure this in minutes
     # and the window it scans in days.

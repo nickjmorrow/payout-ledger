@@ -74,6 +74,26 @@ class RecipientOut(ApiSchema):
 # ---------------------------------------------------------------- requests
 
 
+class FindingOut(ApiSchema):
+    id: UUID
+    kind: str
+    transfer_id: UUID | None
+    provider_reference: str | None
+    detail: str
+    healed: bool
+    created_at: datetime
+
+
+class OverviewOut(ApiSchema):
+    accounts: list["AccountOut"]
+    # Always zero. Surfaced rather than asserted only in tests, because a
+    # non-zero value means a database trigger has gone missing and nothing else
+    # would say so.
+    trial_balance_minor: int
+    unresolved_findings: int
+    dead_lettered: int
+
+
 class TransferIn(ApiSchema):
     recipient_id: UUID
     # `gt=0` here as well as a CHECK in the database. This one produces a 422

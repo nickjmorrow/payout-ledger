@@ -32,11 +32,22 @@ services:
     build:
       context: ./backend
       target: dev
-    command: ['alembic', 'upgrade', 'head']
+    # Migrate, then seed. One container and one `&&` rather than two
+    # services, because the ordering is not a preference: seeding inserts into
+    # tables the migration creates, and `depends_on` between two one-shots
+    # would express the dependency without guaranteeing the schema is actually
+    # there first.
+    #
+    # The seeder is idempotent, so this runs on every `docker compose up`. It
+    # creates the chart of accounts, which is required setup rather than sample
+    # data — no transfer can be authorised without it. `SEED_DEMO_DATA=false`
+    # keeps the accounts and skips the recipients and opening balance.
+    command: ['sh', '-c', 'alembic upgrade head && python -m app.seed']
     environment:
       DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-console}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
     volumes:
       # Mounted so a new revision applies without rebuilding the image — and
       # NOT read-only, because the documented way to write one is

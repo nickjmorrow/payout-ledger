@@ -10,6 +10,12 @@ service layer to enforce. The application validates too — better errors, close
 to the user — but the database is the thing that cannot be bypassed by a
 migration script, a psql session, or the next process someone writes.
 
+`onupdate=func.now()` on the `updated_at` columns is a third thing again, and
+it is the one that was missing: without it the column records when a row was
+*created* and never moves, so a transfer that went pending → processing →
+succeeded still showed its original timestamp. SQLAlchemy emits it on any
+flushed UPDATE; a raw SQL update still has to set the column itself.
+
 Note `default=` AND `server_default=` on several columns. They are not
 redundant: `default=` is applied by SQLAlchemy when the ORM inserts a row, and
 `server_default=` is what the column actually has in Postgres. Declare only the
@@ -368,7 +374,10 @@ class Transfer(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
     recipient: Mapped["Recipient"] = relationship()
@@ -463,7 +472,10 @@ class ProviderPayment(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
     __table_args__ = (

@@ -16,6 +16,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import select, text
 
+from app import seed
 from app.config import settings
 from app.models import Account, Recipient, ReconciliationFinding, Transfer
 from app.provider.mock import MockProvider
@@ -329,3 +330,28 @@ async def _claim(session):
     task = await task_service.claim_next(session, worker_id="w1")
     assert task is not None
     return task
+
+
+# ------------------------------------------------------------------ seeding
+
+
+async def test_seeding_twice_does_not_fund_the_programme_twice(session):
+    """The seeder runs on every boot, so this is the failure that matters.
+
+    A second opening balance would keep the books perfectly balanced — it is a
+    valid journal entry — so no constraint and no trial balance would ever
+    catch it. The fund would simply grow on every restart.
+    """
+    await seed.seed_chart_of_accounts(session)
+    await seed.seed_demo_data(session)
+    await seed.seed_chart_of_accounts(session)
+    await seed.seed_demo_data(session)
+
+    funding = await ledger_service.system_account(session, kind="program_funding", currency=KES)
+    assert (
+        await ledger_service.balance(session, account_id=funding.id) == seed.OPENING_BALANCE_MINOR
+    )
+
+    recipients = await session.execute(select(Recipient))
+    assert len(recipients.scalars().all()) == len(seed.DEMO_RECIPIENTS)
+    assert await ledger_service.trial_balance(session) == 0
