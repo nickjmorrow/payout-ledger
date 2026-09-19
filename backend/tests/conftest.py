@@ -20,7 +20,7 @@ import os
 # Where to create the test database. Points at docker-compose's db by default,
 # so `docker compose up db -d && uv run pytest` works with no setup.
 ADMIN_DSN = os.environ.get(
-    "TEST_DATABASE_ADMIN_DSN", "postgresql://app:app@localhost:5433/postgres"
+    "TEST_DATABASE_ADMIN_DSN", "postgresql://app:app@localhost:5434/postgres"
 )
 TEST_DB = "test_ledger"
 _base = ADMIN_DSN.rsplit("/", 1)[0]

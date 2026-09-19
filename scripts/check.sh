@@ -74,7 +74,7 @@ pnpm_cmd() {
 # Is there a Postgres to run the integration suite against? Checked rather than
 # assumed, because `docker compose up db` is a thing you forget.
 database_is_up() {
-  local dsn="${TEST_DATABASE_ADMIN_DSN:-postgresql://app:app@localhost:5433/postgres}"
+  local dsn="${TEST_DATABASE_ADMIN_DSN:-postgresql://app:app@localhost:5434/postgres}"
   local host port
   host="$(printf '%s' "$dsn" | sed -E 's|.*@([^:/]+).*|\1|')"
   port="$(printf '%s' "$dsn" | sed -E 's|.*:([0-9]+)/.*|\1|')"

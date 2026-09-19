@@ -36,7 +36,7 @@ services:
       timeout: 5s
       retries: 5
     # Deliberately NOT published. Nothing outside this network needs it, and the
-    # development stack exposing 5433 is a convenience, not a pattern to copy.
+    # development stack exposing 5434 is a convenience, not a pattern to copy.
 
   # Runs to completion before anything else starts. A failed migration stops the
   # deploy here rather than leaving a half-started app pointed at the wrong

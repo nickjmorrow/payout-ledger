@@ -24,7 +24,7 @@ DEV_USER_ID = "dev-user"
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = "postgresql+asyncpg://app:app@localhost:5433/app"
+    database_url: str = "postgresql+asyncpg://app:app@localhost:5434/app"
 
     # How long the worker waits on a LISTEN before looking around anyway. It is
     # woken by NOTIFY the instant a task is enqueued, so this is not the

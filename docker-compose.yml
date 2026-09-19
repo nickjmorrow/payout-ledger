@@ -11,7 +11,7 @@ services:
       POSTGRES_DB: app
     ports:
       # Exposed on a non-default port so it never collides with a local Postgres.
-      - '5433:5432'
+      - '5434:5432'
     volumes:
       - db_data:/var/lib/postgresql/data
       # Nothing is mounted into docker-entrypoint-initdb.d. That hook runs once,
