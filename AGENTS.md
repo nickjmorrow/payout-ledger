@@ -46,7 +46,7 @@ through a Protocol, exactly as a real integration would be.
 docker compose up          # db, migrate+seed, backend, worker, frontend
 ```
 
-Then <http://localhost:3000>. The programme is seeded with an opening balance
+Then <http://localhost:3001>. The programme is seeded with an opening balance
 and six recipients; authorise a disbursement and watch it settle.
 
 `scripts/setup.sh` once per clone, `scripts/check.sh` for everything.

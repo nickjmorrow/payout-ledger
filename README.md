@@ -11,7 +11,7 @@ Postgres + FastAPI + React + a worker. Four containers, one command.
 docker compose up
 ```
 
-Then open <http://localhost:3000>. The programme starts with an opening balance
+Then open <http://localhost:3001>. The programme starts with an opening balance
 and six recipients. Authorise a disbursement and watch it move: **pending**
 while the fund is debited and nobody has been paid yet, **processing** once the
 provider accepts it, **succeeded** when they confirm the money arrived.
@@ -53,7 +53,7 @@ The domain is small. The failures it survives are not.
 
 ```bash
 # Retry a disbursement with the same key: one payment, replayed response.
-curl -s -X POST localhost:8000/api/transfers \
+curl -s -X POST localhost:8001/api/transfers \
   -H 'Content-Type: application/json' -H 'Idempotency-Key: try-this-once' \
   -d '{"recipientId":"<id>","amountMinor":250000,"currency":"KES"}' -D-
 
@@ -70,9 +70,9 @@ docker compose exec db psql -U app -d app -c \
 
 | Service | URL |
 | --- | --- |
-| Console | <http://localhost:3000> |
-| API | <http://localhost:8000> |
-| API docs | <http://localhost:8000/docs> |
+| Console | <http://localhost:3001> |
+| API | <http://localhost:8001> |
+| API docs | <http://localhost:8001/docs> |
 | Postgres | `localhost:5434` (`app` / `app` / `app`) |
 
 ## Working on it

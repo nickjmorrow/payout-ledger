@@ -1,5 +1,16 @@
 # The DEVELOPMENT stack: hot reload, source mounts, published ports.
 # For anything resembling a deployment see docker-compose.prod.yml.
+#
+# **Every published port is overridable and none of them are the obvious
+# choice.** 3001/8001/5434 rather than 3000/8000/5432, because a developer
+# machine runs more than one project and the defaults collide — which is not
+# hypothetical: this stack hit that twice while being built, once on Postgres
+# and once on both app ports at the same time. Set FRONTEND_PORT, BACKEND_PORT
+# or POSTGRES_PORT in .env to move them again.
+#
+# CORS_ORIGINS follows FRONTEND_PORT, so moving the frontend does not silently
+# break the browser's requests. In the compose setup Vite proxies /api anyway,
+# so this only matters if you run the frontend on the host.
 name: ledger
 
 services:
@@ -10,8 +21,7 @@ services:
       POSTGRES_PASSWORD: app
       POSTGRES_DB: app
     ports:
-      # Exposed on a non-default port so it never collides with a local Postgres.
-      - '5434:5432'
+      - '${POSTGRES_PORT:-5434}:5432'
     volumes:
       - db_data:/var/lib/postgresql/data
       # Nothing is mounted into docker-entrypoint-initdb.d. That hook runs once,
@@ -74,9 +84,9 @@ services:
       # startup instead and says exactly what to do — see app/config.py.
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-console}
-      CORS_ORIGINS: http://localhost:3000
+      CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-3001}
     ports:
-      - '8000:8000'
+      - '${BACKEND_PORT:-8001}:8000'
     volumes:
       # Source mount + --reload gives you edit-and-refresh without a rebuild.
       - ./backend/app:/srv/app:ro
@@ -132,7 +142,7 @@ services:
       # never needs to know the backend URL and there is no CORS in dev.
       BACKEND_ORIGIN: http://backend:8000
     ports:
-      - '3000:3000'
+      - '${FRONTEND_PORT:-3001}:3000'
     volumes:
       - ./frontend/src:/srv/src:ro
       - ./frontend/index.html:/srv/index.html:ro
