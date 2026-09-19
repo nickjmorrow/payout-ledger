@@ -104,6 +104,17 @@ services:
       DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: ${LOG_FORMAT:-console}
+      # The mock provider's failure hooks, passed through so they can be turned
+      # on from the shell without editing a file:
+      #
+      #   PROVIDER_UNREACHABLE=true docker compose up -d worker
+      #
+      # Only the worker gets these. The API never talks to the provider, so
+      # giving it the knobs would imply it does.
+      PROVIDER_UNREACHABLE: ${PROVIDER_UNREACHABLE:-false}
+      PROVIDER_REJECT_ALL: ${PROVIDER_REJECT_ALL:-false}
+      PROVIDER_FAIL_SETTLEMENT: ${PROVIDER_FAIL_SETTLEMENT:-false}
+      PROVIDER_SETTLE_AFTER_SECONDS: ${PROVIDER_SETTLE_AFTER_SECONDS:-5}
     volumes:
       - ./backend/app:/srv/app:ro
     depends_on:
