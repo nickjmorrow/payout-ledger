@@ -31,15 +31,14 @@ fails because a file was renamed sensibly teaches people to delete tests.
 Anything behavioural, which is what the rest of the suite is for.
 
 **Frontend-only rules live in `frontend/src/structure.test.ts`,** not here: a
-frontend developer running `pnpm test` should see them fail. The one exception
-is the cross-language event contract at the bottom of this file, because the
-backend is the side that defines it.
+frontend developer running `pnpm test` should see them fail.
 
 These tests need no database and no network, so the pre-commit hook can run them
 on every commit. Keep it that way.
 """
 
 import ast
+import re
 from pathlib import Path
 
 from app.worker import handlers
@@ -231,7 +230,11 @@ def test_only_the_provider_package_touches_the_provider_table():
         if path in allowed or path.is_relative_to(APP / "provider"):
             continue
         source = path.read_text()
-        if "ProviderPayment" in source or "provider_payments" in source:
+        # Word-bounded, so that `ProviderPaymentView` does not match. That type
+        # is the Protocol's contract — the shape a real provider's JSON would
+        # be parsed into — and importing it is exactly what the seam is for. A
+        # substring match flagged every correct caller on its first run.
+        if re.search(r"\bProviderPayment\b", source) or "provider_payments" in source:
             offenders.append(_relative(path))
 
     assert offenders == [], (
@@ -250,7 +253,7 @@ def test_nothing_outside_the_provider_package_imports_the_mock():
     against a real integration, and a test written against it passes here and
     fails in production.
     """
-    allowed = {APP / "provider" / "mock.py", APP / "worker" / "loop.py"}
+    allowed = {APP / "provider" / "mock.py", APP / "provider" / "registry.py"}
     offenders: list[str] = []
     for path in APP_MODULES:
         if path in allowed or path.is_relative_to(APP / "provider"):

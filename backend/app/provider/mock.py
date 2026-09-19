@@ -14,10 +14,18 @@ quietly give the mock a property the real thing cannot have — and every test
 written against that property would pass here and fail in production.
 
 Payments do not settle instantly. `send_payment` records a `pending` payment
-and returns; settlement happens when `advance_pending` is called, which is what
-the worker does on a later pass. That gap is deliberate: a provider that
-succeeds synchronously never exercises the states — in flight, settled later,
-never settled — that the whole async design exists to handle.
+and returns; it becomes `succeeded` once it is old enough. That gap is
+deliberate — a provider that succeeds synchronously never exercises the states
+(in flight, settled later, never settled) the whole async design exists to
+handle.
+
+**Settlement happens lazily, inside `get_payment` and `list_payments`.** That
+is not a shortcut, it is the point: a real provider settles on its own schedule
+and offers no way to make it happen sooner, so nothing in this application may
+be able to *cause* a settlement. If the worker had to call `advance_pending` on
+a timer, the app would be driving the provider's clock — and every test written
+against that ability would pass here and fail against a real integration. Time
+passing is the only trigger, and asking is the only way to find out.
 
 The failure hooks at the bottom default to off. They exist so the chaos pass
 has somewhere to plug in, and are not themselves that pass.
@@ -107,11 +115,15 @@ class MockProvider:
             return _view(payment)
 
     async def get_payment(self, *, reference: str) -> ProviderPaymentView | None:
+        # Settle first, so the answer reflects the passage of time rather than
+        # whenever somebody last ran a job. See the module docstring.
+        await self.advance_pending()
         async with SessionFactory() as session:
             row = await session.get(ProviderPayment, reference)
             return _view(row) if row is not None else None
 
     async def list_payments(self, *, since: datetime) -> list[ProviderPaymentView]:
+        await self.advance_pending()
         async with SessionFactory() as session:
             result = await session.execute(
                 select(ProviderPayment)
@@ -122,18 +134,17 @@ class MockProvider:
 
     # ------------------------------------------------------------ mock only
     #
-    # Below here is not part of `PaymentProvider` and must not be called from
-    # outside `app/provider/`. A real provider settles payments on its own
-    # schedule and offers nothing like this; code that depends on being able to
-    # drive settlement is code that cannot run against the real thing.
+    # Not part of `PaymentProvider`. Called by the two reads above and by
+    # tests, and by nothing else — a structural test keeps this module
+    # unimportable from outside `app/provider/` precisely so that application
+    # code cannot reach it.
 
     async def advance_pending(self) -> int:
         """Settle pending payments that are old enough. Returns how many moved.
 
-        Stands in for the provider's own clock. Called by the worker on its
-        regular pass so that a payment instructed a moment ago is `pending` for
-        a while and then settles, without anything in the application being
-        able to make that happen sooner.
+        Stands in for the provider's own clock. Idempotent and safe to call on
+        every read: it only touches rows whose settle time has passed, so
+        calling it twice in a row does nothing the second time.
         """
         cutoff = datetime.now(UTC) - timedelta(seconds=settings.provider_settle_after_seconds)
 

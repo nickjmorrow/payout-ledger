@@ -16,7 +16,7 @@ bookkeeping.
 """
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import exists, func, select, text
@@ -200,6 +200,17 @@ async def retry_later(
     )
 
 
+def seconds_from_now(seconds: float) -> datetime:
+    """A `run_at` this far ahead.
+
+    Here rather than at each call site so that every delayed enqueue uses the
+    same clock — and it is Python's rather than Postgres's only because
+    `run_at` is compared against `now()` on the server, which makes any skew
+    between the two a scheduling wobble rather than a correctness problem.
+    """
+    return datetime.now(UTC) + timedelta(seconds=seconds)
+
+
 def retry_delay_seconds(attempts: int) -> float:
     """Exponential backoff, capped.
 
@@ -275,3 +286,29 @@ async def sweep_stale(session: AsyncSession, *, stale_seconds: int | None = None
     if ids:
         logger.warning("tasks swept", count=len(ids))
     return len(ids)
+
+
+async def dead_lettered(session: AsyncSession, *, limit: int = 50) -> list[Task]:
+    """Tasks that exhausted their retries and are parked for a human.
+
+    **This is the dead-letter queue.** It is not a second table, because it
+    does not need to be: a task that has run out of attempts is a row with
+    `status = 'failed'` and the error that stopped it, and moving it somewhere
+    else would only lose the attempt history and the payload alongside it.
+
+    What makes it a DLQ rather than a leak is that something is expected to
+    look. A failed disbursement has already reversed its transfer — see
+    `worker/disburse._handle_provider_error` — so the money is not stuck; what
+    is left here is the evidence of why.
+    """
+    result = await session.execute(
+        select(Task).where(Task.status == "failed").order_by(Task.updated_at.desc()).limit(limit)
+    )
+    return list(result.scalars())
+
+
+async def pending_count(session: AsyncSession, *, kind: str) -> int:
+    result = await session.execute(
+        select(func.count()).select_from(Task).where(Task.kind == kind, Task.status == "pending")
+    )
+    return int(result.scalar_one())

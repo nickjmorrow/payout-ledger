@@ -23,10 +23,20 @@ from app.config import settings
 from app.db import SessionFactory, engine
 from app.logging import configure_logging, get_logger
 from app.services import task_service
-from app.worker import shutdown
-from app.worker.handlers import execute
+from app.worker import disburse, shutdown
+from app.worker.handlers import HANDLERS, execute
 
 logger = get_logger(__name__)
+
+# The modules whose `@register` decorators populate the task registry. A worker
+# that has not imported one of these claims its tasks and then reports them as
+# an unknown kind, which fails every disbursement with a message that sounds
+# like a bad enqueue rather than a missing import.
+#
+# Named in a tuple rather than left as a bare side-effect import so that the
+# reference is real: an unused import is exactly the kind of thing a linter,
+# an editor, or a tidy-minded person deletes.
+HANDLER_MODULES = (disburse,)
 
 
 async def drain(worker_id: str) -> int:
@@ -55,7 +65,7 @@ async def tick(worker_id: str) -> int:
 
 async def run_forever() -> None:
     worker_id = f"{socket.gethostname()}:{os.getpid()}"
-    logger.info("worker starting", worker_id=worker_id)
+    logger.info("worker starting", worker_id=worker_id, kinds=sorted(HANDLERS))
 
     shutdown.install_signal_handlers()
 

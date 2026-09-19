@@ -39,6 +39,11 @@ logger = get_logger(__name__)
 # worker/handlers.py.
 DISBURSE = "disburse_transfer"
 
+# How long to wait before asking the provider what became of a payment. Short
+# enough that the demo moves, long enough that the first check is not certain
+# to find it still pending.
+SETTLE_CHECK_DELAY_SECONDS = 3
+
 
 class TransferError(Exception):
     """Base for every refusal in this module."""
