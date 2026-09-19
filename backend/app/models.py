@@ -414,3 +414,51 @@ class IdempotencyKey(Base):
         UniqueConstraint("key", "endpoint", name="idempotency_keys_key_endpoint_key"),
         Index("idempotency_keys_created_idx", desc("created_at")),
     )
+
+
+class ProviderPayment(Base):
+    """The mobile-money provider's record of a payment. **Not our books.**
+
+    This table stands in for a system we do not own. In production it is an
+    HTTP API at somebody else's company; here it is a table so the whole thing
+    runs with `docker compose up`. Everything else in the schema is ours and is
+    written by our services — this one is written *only* by
+    `provider/mock.py`, pretending to be them.
+
+    Keeping it a separate table rather than columns on `transfers` is what
+    makes reconciliation a real comparison. Two independent records of the same
+    payment can disagree, and finding out that they have is the entire job of
+    the reconciliation pass. Fold this into `transfers` and reconciliation
+    becomes a query that compares a row to itself and always passes.
+
+    `idempotency_key` is theirs, not ours: a real provider dedupes on a key we
+    supply, which is what makes it safe for the worker to retry a payment it is
+    not sure landed. That is the whole reason at-least-once delivery is
+    tolerable.
+    """
+
+    __tablename__ = "provider_payments"
+
+    # Their identifier, which we store on the transfer as `provider_reference`.
+    reference: Mapped[str] = mapped_column(Text, primary_key=True)
+    idempotency_key: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    msisdn: Mapped[str] = mapped_column(Text, nullable=False)
+    amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status in ('pending', 'succeeded', 'failed')", name="provider_payments_status_check"
+        ),
+        CheckConstraint("amount_minor > 0", name="provider_payments_amount_check"),
+        # Reconciliation sweeps by time, so this is the index it runs on.
+        Index("provider_payments_created_idx", desc("created_at")),
+    )

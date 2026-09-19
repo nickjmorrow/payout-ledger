@@ -38,7 +38,10 @@ BACKEND_ROOT = Path(__file__).resolve().parents[2]
 # CASCADE resolves the FK order for us, so this list does not have to be
 # topologically sorted — but every table does have to be named, or a test that
 # leaves rows behind silently poisons the next one.
-TABLES = "tasks, recipients, accounts, transfers, journal_entries, ledger_entries, idempotency_keys"
+TABLES = (
+    "tasks, recipients, accounts, transfers, journal_entries, ledger_entries,"
+    " idempotency_keys, provider_payments"
+)
 
 
 def _migrate() -> None:

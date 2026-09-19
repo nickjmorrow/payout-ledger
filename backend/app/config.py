@@ -52,6 +52,29 @@ class Settings(BaseSettings):
     task_retry_base_seconds: float = 5.0
     task_retry_max_seconds: float = 120.0
 
+    # ------------------------------------------------------------- provider
+    #
+    # The mock provider's behaviour. All three failure hooks default to off:
+    # they exist so the chaos pass has somewhere to plug in, and are not
+    # themselves that pass. Nothing in the application reads them — only
+    # `provider/mock.py`, which is pretending to be somebody else's company.
+
+    # How long a payment sits `pending` before the provider settles it. Not
+    # zero, deliberately: a provider that succeeds synchronously never
+    # exercises the in-flight states the whole async design exists to handle.
+    provider_settle_after_seconds: int = 5
+
+    # Every send fails permanently. Simulates a rejected integration — the
+    # kind of failure where retrying cannot help.
+    provider_reject_all: bool = False
+
+    # Every send fails retryably. Simulates a network partition or an outage.
+    provider_unreachable: bool = False
+
+    # Sends are accepted, then fail at settlement. The nastiest of the three,
+    # because the money looked like it was on its way.
+    provider_fail_settlement: bool = False
+
     # ---------------------------------------------------------------- auth
     #
     # Empty issuer means auth is OFF and every request is the dev user — which

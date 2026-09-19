@@ -211,6 +211,60 @@ def test_only_main_imports_the_http_layer():
     )
 
 
+# --------------------------------------------------------- the provider seam
+#
+# AGENTS.md > The provider seam: the rest of the application talks to
+# `PaymentProvider` and never to a concrete provider, and `provider_payments`
+# is the provider's storage rather than ours. The moment a service reads that
+# table directly, reconciliation starts comparing our records to our records
+# and passes for the wrong reason.
+
+
+def test_only_the_provider_package_touches_the_provider_table():
+    """`provider_payments` is theirs. We reach it through the Protocol."""
+    # models.py is the one exception, and it is not a leak: Alembic diffs every
+    # model from one module, so the table has to be *declared* there or no
+    # migration would ever create it. Declaring it is not using it.
+    allowed = {APP / "models.py"}
+    offenders: list[str] = []
+    for path in APP_MODULES:
+        if path in allowed or path.is_relative_to(APP / "provider"):
+            continue
+        source = path.read_text()
+        if "ProviderPayment" in source or "provider_payments" in source:
+            offenders.append(_relative(path))
+
+    assert offenders == [], (
+        f"{offenders} reference the provider's own table. That table stands in for a system we "
+        "do not own, and everything outside app/provider/ reaches it through the PaymentProvider "
+        "Protocol exactly as it would reach an HTTP API. Reading it directly makes reconciliation "
+        "compare our records to our records. See AGENTS.md > The provider seam."
+    )
+
+
+def test_nothing_outside_the_provider_package_imports_the_mock():
+    """Depending on the mock is depending on behaviour the real thing lacks.
+
+    `advance_pending` above all: a real provider settles on its own schedule
+    and offers no way to make it happen sooner. Code that calls it cannot run
+    against a real integration, and a test written against it passes here and
+    fails in production.
+    """
+    allowed = {APP / "provider" / "mock.py", APP / "worker" / "loop.py"}
+    offenders: list[str] = []
+    for path in APP_MODULES:
+        if path in allowed or path.is_relative_to(APP / "provider"):
+            continue
+        if "provider.mock" in path.read_text():
+            offenders.append(_relative(path))
+
+    assert offenders == [], (
+        f"{offenders} import the mock provider. Depend on app.provider.base.PaymentProvider and "
+        "take the concrete one as an argument, so a fake can be passed in rather than patched "
+        "over. See AGENTS.md > The provider seam."
+    )
+
+
 # -------------------------------------------------------- the handler registry
 #
 # AGENTS.md > The worker: "A task kind is a registration in `HANDLERS`, not a
