@@ -146,6 +146,12 @@ class Task(Base):
         # that has ever run, which is the opposite of the point.
         Index("tasks_claim_idx", "run_at", postgresql_where=text("status = 'pending'")),
         Index("tasks_kind_idx", "kind", desc("created_at")),
+        # A transfer's history is every task that named it in the payload. An
+        # expression index rather than a `transfer_id` column, because a task
+        # is generic work and most kinds — reconcile, above all — are about no
+        # transfer at all; a column that is null for them would be a column
+        # that lies about what a task is.
+        Index("tasks_transfer_idx", text("(payload ->> 'transfer_id')")),
     )
 
 

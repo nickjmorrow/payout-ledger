@@ -252,3 +252,52 @@ async def test_concurrent_transfers_cannot_overdraw_the_fund(session, recipient)
     remaining = await ledger_service.balance(session, account_id=funding.id)
     assert remaining == 400_00
     assert await ledger_service.trial_balance(session) == 0
+
+
+# ------------------------------------------------------------------ the detail
+
+
+@pytest.mark.usefixtures("chart")
+async def test_the_detail_shows_the_journal_and_the_attempts(client, session, recipient):
+    """What the books say and what the worker did, in one response.
+
+    Asserted on what the lines *mean* rather than on their existence: the
+    authorisation debits the fund and credits the recipient's payable, and a
+    reversal is a second journal with the pair the other way round — both
+    still on the page, because that is the whole argument for append-only.
+    """
+    response = await _post(client, recipient.id)
+    transfer_id = response.json()["data"]["id"]
+
+    detail = (await client.get(f"/api/transfers/{transfer_id}")).json()["data"]
+    assert detail["status"] == "pending"
+    assert [j["kind"] for j in detail["journals"]] == ["transfer_authorized"]
+    assert [t["kind"] for t in detail["tasks"]] == ["disburse_transfer"]
+    assert detail["tasks"][0]["transferId"] == transfer_id
+
+    lines = {line["accountKind"]: line for line in detail["journals"][0]["lines"]}
+    assert lines["program_funding"]["direction"] == "debit"
+    assert lines["recipient_payable"]["direction"] == "credit"
+    assert {line["amountMinor"] for line in lines.values()} == {2_500_00}
+
+    # The fixture's `refresh` auto-began a transaction on this session that is
+    # still open, and Postgres's `now()` is frozen at transaction start — so a
+    # reversal posted through it would carry a timestamp from *before* the
+    # authorisation the API just committed, and sort ahead of it. End it first.
+    await session.rollback()
+    transfer = await transfer_service.get(session, transfer_id=uuid.UUID(transfer_id))
+    assert transfer is not None
+    await transfer_service.mark_failed(session, transfer=transfer, reason="wallet unreachable")
+    await session.commit()
+
+    detail = (await client.get(f"/api/transfers/{transfer_id}")).json()["data"]
+    assert [j["kind"] for j in detail["journals"]] == ["transfer_authorized", "transfer_reversed"]
+    reversal = {line["accountKind"]: line for line in detail["journals"][1]["lines"]}
+    assert reversal["program_funding"]["direction"] == "credit"
+    assert reversal["recipient_payable"]["direction"] == "debit"
+
+
+@pytest.mark.usefixtures("chart")
+async def test_an_unknown_transfer_detail_is_a_404(client):
+    response = await client.get(f"/api/transfers/{uuid.uuid4()}")
+    assert response.status_code == 404

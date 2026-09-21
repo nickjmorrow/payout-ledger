@@ -26,6 +26,7 @@ from typing import Literal
 from sqlalchemy import ColumnElement, case, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.logging import get_logger
 from app.models import Account, JournalEntry, LedgerEntry
@@ -307,6 +308,26 @@ async def lock_account(session: AsyncSession, *, account_id: uuid.UUID) -> None:
     nothing there to lock.
     """
     await session.execute(select(Account.id).where(Account.id == account_id).with_for_update())
+
+
+async def journals_for_transfer(
+    session: AsyncSession, *, transfer_id: uuid.UUID
+) -> list[JournalEntry]:
+    """Every posting made on behalf of one transfer, oldest first, lines loaded.
+
+    This is the transfer's life as the books tell it: authorised, then settled
+    or reversed. The lines come with their accounts because the reader wants to
+    know *which* fund was debited, not a uuid — and because touching a lazy
+    relationship from async code raises `MissingGreenlet`, which reads like a
+    driver bug and is not one.
+    """
+    result = await session.execute(
+        select(JournalEntry)
+        .options(selectinload(JournalEntry.lines).selectinload(LedgerEntry.account))
+        .where(JournalEntry.transfer_id == transfer_id)
+        .order_by(JournalEntry.created_at)
+    )
+    return list(result.scalars())
 
 
 async def system_accounts(session: AsyncSession) -> list[Account]:

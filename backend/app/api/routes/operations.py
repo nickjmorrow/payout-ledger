@@ -81,7 +81,7 @@ async def list_dead_letters(session: DbSession, _user: CurrentUser) -> ApiRespon
     is still stuck.
     """
     tasks = await task_service.dead_lettered(session)
-    return ApiResponse(data=[TaskOut.model_validate(t) for t in tasks])
+    return ApiResponse(data=[TaskOut.from_task(t) for t in tasks])
 
 
 async def _system_accounts(session: DbSession) -> list[AccountOut]:

@@ -307,6 +307,23 @@ async def dead_lettered(session: AsyncSession, *, limit: int = 50) -> list[Task]
     return list(result.scalars())
 
 
+async def for_transfer(session: AsyncSession, *, transfer_id: uuid.UUID) -> list[Task]:
+    """Every task that has ever been about one transfer, oldest first.
+
+    The send, the settlement checks, and every retry of either: what a person
+    reads to answer "why did this payment take four minutes". Matched on the
+    payload rather than a column, because a task is generic work and the
+    transfer is one of the things it can be about; `tasks_transfer_idx` keeps
+    the lookup off a sequential scan.
+    """
+    result = await session.execute(
+        select(Task)
+        .where(Task.payload["transfer_id"].astext == str(transfer_id))
+        .order_by(Task.created_at)
+    )
+    return list(result.scalars())
+
+
 async def pending_count(session: AsyncSession, *, kind: str) -> int:
     result = await session.execute(
         select(func.count()).select_from(Task).where(Task.kind == kind, Task.status == "pending")

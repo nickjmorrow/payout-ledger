@@ -13,10 +13,18 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import ApiResponse, TransferIn, TransferOut
+from app.api.schemas import (
+    ApiResponse,
+    JournalOut,
+    LineOut,
+    TaskOut,
+    TransferDetailOut,
+    TransferIn,
+    TransferOut,
+)
 from app.logging import get_logger
 from app.models import Transfer
-from app.services import idempotency_service, transfer_service
+from app.services import idempotency_service, ledger_service, task_service, transfer_service
 from app.services.idempotency_service import InFlightError, KeyConflictError, Replay
 
 logger = get_logger(__name__)
@@ -133,9 +141,45 @@ async def list_transfers(session: DbSession, _user: CurrentUser) -> ApiResponse[
 @router.get("/{transfer_id}")
 async def get_transfer(
     transfer_id: uuid.UUID, session: DbSession, _user: CurrentUser
-) -> ApiResponse[TransferOut]:
+) -> ApiResponse[TransferDetailOut]:
+    """One transfer, with everything that happened to it.
+
+    The journal entries are the books' account of it and the tasks are the
+    worker's; between them a person can see the fund debited at authorisation,
+    the send and each settlement check, and the reversal if it failed — with
+    both the promise and its withdrawal still on the page.
+    """
     transfer = await transfer_service.get(session, transfer_id=transfer_id)
     if transfer is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such transfer")
     await session.refresh(transfer, ["recipient"])
-    return ApiResponse(data=_out(transfer))
+
+    journals = await ledger_service.journals_for_transfer(session, transfer_id=transfer_id)
+    tasks = await task_service.for_transfer(session, transfer_id=transfer_id)
+
+    return ApiResponse(
+        data=TransferDetailOut(
+            **_out(transfer).model_dump(),
+            journals=[
+                JournalOut(
+                    id=journal.id,
+                    kind=journal.kind,
+                    memo=journal.memo,
+                    created_at=journal.created_at,
+                    lines=[
+                        LineOut(
+                            account_id=line.account_id,
+                            account_kind=line.account.kind,
+                            account_name=line.account.name,
+                            direction=line.direction,  # pyright: ignore[reportArgumentType]
+                            amount_minor=line.amount_minor,
+                            currency=line.currency,
+                        )
+                        for line in journal.lines
+                    ],
+                )
+                for journal in journals
+            ],
+            tasks=[TaskOut.from_task(task) for task in tasks],
+        )
+    )

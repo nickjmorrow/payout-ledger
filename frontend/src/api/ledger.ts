@@ -24,6 +24,45 @@ export interface Transfer {
   updatedAt: string;
 }
 
+export type TaskStatus = 'cancelled' | 'failed' | 'pending' | 'running' | 'succeeded';
+
+export interface Task {
+  attempts: number;
+  claimedBy: null | string;
+  createdAt: string;
+  error: null | string;
+  id: string;
+  kind: string;
+  maxAttempts: number;
+  runAt: string;
+  status: TaskStatus;
+  transferId: null | string;
+  updatedAt: string;
+}
+
+export interface Line {
+  accountId: string;
+  accountKind: string;
+  accountName: string;
+  amountMinor: number;
+  currency: string;
+  direction: 'credit' | 'debit';
+}
+
+export interface Journal {
+  createdAt: string;
+  id: string;
+  kind: string;
+  lines: Line[];
+  memo: null | string;
+}
+
+/** A transfer with its two histories: the books' account and the worker's. */
+export interface TransferDetail extends Transfer {
+  journals: Journal[];
+  tasks: Task[];
+}
+
 export interface Recipient {
   country: string;
   enrolledAt: string;
@@ -69,9 +108,14 @@ export interface DisburseRequest {
   recipientId: string;
 }
 
+/**
+ * Query keys, hierarchical so that invalidating a family reaches every
+ * member: `['transfers']` covers the list and every `['transfers', id]`.
+ */
 export const ledgerKeys = {
   overview: ['overview'] as const,
   recipients: ['recipients'] as const,
+  transfer: (id: string) => ['transfers', id] as const,
   transfers: ['transfers'] as const,
 };
 
@@ -81,6 +125,10 @@ export function getOverview(): Promise<Overview> {
 
 export function listTransfers(): Promise<Transfer[]> {
   return apiFetch<Transfer[]>('/transfers');
+}
+
+export function getTransfer(id: string): Promise<TransferDetail> {
+  return apiFetch<TransferDetail>(`/transfers/${id}`);
 }
 
 export function listRecipients(): Promise<Recipient[]> {

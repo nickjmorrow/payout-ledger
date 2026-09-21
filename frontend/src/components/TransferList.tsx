@@ -1,11 +1,21 @@
+import { useState } from 'react';
 import StatusPill from 'src/components/StatusPill';
+import TransferDetail from 'src/components/TransferDetail';
 import { formatTime } from 'src/format';
 import useTransfers from 'src/hooks/useTransfers';
 import { formatMoney } from 'src/money';
 
-/** Every disbursement, newest first. */
+/**
+ * Every disbursement, newest first. Click one for its history.
+ *
+ * The recipient's name is the control rather than the whole row, because a
+ * row is not a button: it cannot take focus, a screen reader will not announce
+ * it as something to press, and a click on the status pill to copy a reference
+ * would open a drawer instead. One real button per row costs nothing.
+ */
 export default function TransferList() {
   const { data: transfers } = useTransfers();
+  const [selectedId, setSelectedId] = useState<null | string>(null);
 
   if (transfers?.length === 0) {
     return (
@@ -33,8 +43,24 @@ export default function TransferList() {
         </thead>
         <tbody>
           {(transfers ?? []).map((transfer) => (
-            <tr className={'border-t border-ink/5'} key={transfer.id}>
-              <td className={'px-4 py-2 text-ink'}>{transfer.recipientName}</td>
+            <tr
+              className={[
+                'border-t border-ink/5',
+                transfer.id === selectedId ? 'bg-surface-raised' : '',
+              ].join(' ')}
+              key={transfer.id}
+            >
+              <td className={'px-4 py-2 text-ink'}>
+                <button
+                  className={'text-left underline-offset-2 hover:underline'}
+                  onClick={() => {
+                    setSelectedId(transfer.id);
+                  }}
+                  type={'button'}
+                >
+                  {transfer.recipientName}
+                </button>
+              </td>
               <td className={'px-4 py-2 text-ink tabular-nums'}>
                 {formatMoney(transfer.amountMinor, transfer.currency)}
               </td>
@@ -54,6 +80,15 @@ export default function TransferList() {
           ))}
         </tbody>
       </table>
+
+      {selectedId !== null && (
+        <TransferDetail
+          id={selectedId}
+          onClose={() => {
+            setSelectedId(null);
+          }}
+        />
+      )}
     </div>
   );
 }
