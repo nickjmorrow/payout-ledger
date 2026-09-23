@@ -323,3 +323,26 @@ async def test_a_key_still_in_flight_is_a_409_that_says_when_to_retry(client, se
     response = await _post(client, recipient.id, key="in-flight-key")
     assert response.status_code == 409
     assert response.headers.get("Retry-After") == "1"
+
+
+@pytest.mark.usefixtures("chart")
+async def test_the_queued_payment_carries_the_request_that_asked_for_it(client, session, recipient):
+    """One id across two processes: the API's request and the worker's task.
+
+    The worker re-binds `tasks.request_id` into its log context, so one grep
+    returns both halves of a disbursement. That only works if the id reaches
+    the row, which it did not: routes read it from `request.state`, where
+    nothing ever put it, and every task was stored with none.
+    """
+    response = await client.post(
+        "/api/transfers",
+        json=_body(recipient.id),
+        headers={"Idempotency-Key": "traced-key", "X-Request-Id": "trace-me-123"},
+    )
+    assert response.status_code == 201
+    assert response.headers["x-request-id"] == "trace-me-123"
+
+    stored = await session.execute(
+        text("select request_id from tasks where kind = 'disburse_transfer'")
+    )
+    assert stored.scalar_one() == "trace-me-123"

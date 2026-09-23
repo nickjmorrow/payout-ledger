@@ -10,10 +10,11 @@ it replays is a response.
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Header, HTTPException, Request, Response, status
+from fastapi import APIRouter, Header, HTTPException, Response, status
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.idempotent import claim_or_replay
+from app.api.middleware import current_request_id
 from app.api.schemas import (
     ApiResponse,
     JournalOut,
@@ -54,7 +55,6 @@ def _out(transfer: Transfer) -> TransferOut:
 async def create(
     body: TransferIn,
     session: DbSession,
-    request: Request,
     response: Response,
     _user: CurrentUser,
     # min_length because a key short enough to collide by accident is worse
@@ -94,7 +94,7 @@ async def create(
             recipient_id=body.recipient_id,
             amount_minor=body.amount_minor,
             currency=body.currency,
-            request_id=getattr(request.state, "request_id", None),
+            request_id=current_request_id(),
         )
     except transfer_service.UnknownRecipientError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc

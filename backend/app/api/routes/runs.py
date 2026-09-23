@@ -8,10 +8,11 @@ which is the whole of what makes a run safe to retry. See `run_service`.
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Header, HTTPException, Request, Response, status
+from fastapi import APIRouter, Header, HTTPException, Response, status
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.idempotent import claim_or_replay
+from app.api.middleware import current_request_id
 from app.api.schemas import ApiResponse, RunIn, RunOut
 from app.services import idempotency_service, run_service, transfer_service
 from app.services.run_service import RunItem, RunSummary
@@ -37,7 +38,6 @@ def _out(summary: RunSummary) -> RunOut:
 async def create(
     body: RunIn,
     session: DbSession,
-    request: Request,
     response: Response,
     _user: CurrentUser,
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=8)],
@@ -62,7 +62,7 @@ async def create(
             items=[RunItem(i.recipient_id, i.amount_minor) for i in body.items],
             currency=body.currency,
             memo=body.memo,
-            request_id=getattr(request.state, "request_id", None),
+            request_id=current_request_id(),
         )
     except transfer_service.UnknownRecipientError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
