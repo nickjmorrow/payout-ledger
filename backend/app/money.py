@@ -1,9 +1,4 @@
-"""Amounts as a person reads them, for messages that reach one.
-
-Minor units everywhere else; this is only for text. A refusal that says a fund
-"holds 99350000 USD minor units" is correct and useless to the operator who
-has to act on it.
-"""
+"""Amounts as a person reads them, for messages that reach one. Minor units everywhere else."""
 
 SYMBOLS = {"USD": "$"}
 

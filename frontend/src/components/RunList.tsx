@@ -12,12 +12,8 @@ interface Props {
 }
 
 /**
- * Recent payment runs, each with its progress. Choose one to see its transfers.
- *
- * Choosing the selected run again clears the choice, and the transfer list
- * says which run it is showing, so the filter is never on without the operator
- * being able to see it — a list that silently shows a subset reads as missing
- * payments.
+ * Recent payment runs with their progress. Choosing a run filters the transfer
+ * list; choosing it again clears the filter.
  */
 export default function RunList({ onSelect, selectedId }: Props) {
   const { data: runs, error, isPending } = useRuns();

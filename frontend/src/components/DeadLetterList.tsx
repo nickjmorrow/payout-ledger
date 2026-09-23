@@ -5,11 +5,8 @@ import Skeleton from 'src/components/Skeleton';
 import useDeadLetters from 'src/hooks/useDeadLetters';
 
 /**
- * The dead-letter queue: work that exhausted its retries, parked for a person.
- *
- * Not money that is stuck. A disbursement that runs out of attempts reverses
- * its transfer before it is parked, so what is here is the evidence of why —
- * and a Retry for the cases where running it again can still help.
+ * The dead-letter queue: work that exhausted its retries. A disbursement reverses
+ * its transfer before it is parked, so no money is stuck here.
  */
 export default function DeadLetterList() {
   const { data: tasks, error, isPending } = useDeadLetters();
@@ -22,8 +19,7 @@ export default function DeadLetterList() {
     );
   }
 
-  // No data after loading is a failed read, not an empty queue: "nothing has
-  // run out of retries" is reassurance, and it has to be earned.
+  // No data after loading is a failed read, not an empty queue.
   if (tasks === undefined) {
     return <LoadFailed error={error} what={'dead letters'} />;
   }

@@ -10,16 +10,9 @@ export interface CreateRun {
 }
 
 /**
- * Authorising a payment run, with the idempotency key handled correctly.
- *
- * The same shape as `useDisburse`, deliberately, and for the same reason with
- * more at stake: **one key per attempt, kept across retries.** A run that
- * timed out may or may not have authorised forty payments, and the browser
- * cannot know which. Retrying with the same key gets the first answer back;
- * retrying with a fresh one would authorise forty more.
- *
- * Regenerated only on success or an explicit reset — when the operator is
- * starting a genuinely new run.
+ * Authorizes a payment run. As in `useDisburse`, one idempotency key per attempt,
+ * kept across retries: a run that timed out may have authorized every payment in
+ * it, and only the same key gets that answer back instead of authorizing them again.
  */
 export default function useCreateRun(onCreated?: (run: PaymentRun) => void): CreateRun {
   const queryClient = useQueryClient();

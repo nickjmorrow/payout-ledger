@@ -1,13 +1,8 @@
 import useLiveStatus from 'src/hooks/useLiveStatus';
 
 /**
- * Whether what is on screen is current, said once, in the corner.
- *
- * Worth showing because the two states behave differently in a way an operator
- * would otherwise have to guess at: live, a settlement appears the moment the
- * worker commits it; offline, the console falls back to polling and it can
- * take a few seconds. `offline` is the pending colour rather than danger —
- * nothing is wrong with the money, only with how quickly news of it arrives.
+ * Whether the console is live or polling. Offline uses the pending color: nothing
+ * is wrong with the money, only with how fast news of it arrives.
  */
 const APPEARANCE = {
   connecting: { dot: 'bg-ink/30', label: 'Connecting…', text: 'text-ink-muted' },

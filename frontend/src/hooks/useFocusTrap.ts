@@ -4,12 +4,8 @@ const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
- * Keep keyboard focus inside a modal while it is open, and give it back after.
- *
- * On open, focus moves to the first thing in the container, so a keyboard user
- * lands in the dialog they just opened rather than on the row behind it. Tab
- * and Shift+Tab wrap at the ends. On close, focus returns to whatever opened
- * it, so the next Tab continues from where they were.
+ * Keeps keyboard focus inside a modal while it is open: focus moves in on open,
+ * Tab wraps at the ends, and focus returns to the opener on close.
  */
 export default function useFocusTrap(ref: RefObject<HTMLElement | null>): void {
   useEffect(() => {

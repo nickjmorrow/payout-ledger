@@ -1,15 +1,7 @@
 import type { ReactNode } from 'react';
 import useTheme, { type ThemePreference } from 'src/hooks/useTheme';
 
-/**
- * The three choices, in the order a slider would put them: darkest on the
- * right. `system` sits in the middle because it is the default, not because it
- * is between the other two.
- *
- * These are plain values rather than three little icon components — a
- * component file exports its component and nothing else, and `no-multi-comp`
- * is the rule that enforces it.
- */
+/** Light, system, dark: `system` is in the middle because it is the default. */
 const OPTIONS: { icon: ReactNode; label: string; value: ThemePreference }[] = [
   {
     icon: (
@@ -43,18 +35,8 @@ const OPTIONS: { icon: ReactNode; label: string; value: ThemePreference }[] = [
 ];
 
 /**
- * Pick a theme.
- *
- * Three buttons rather than one that cycles, because a cycling control cannot
- * tell you what it will do next or what state you are in — with three themes
- * and one icon, "which one is showing" and "which one did I pick" are the same
- * glyph and you have to click to find out. Here both are visible at once: the
- * pressed segment is the preference, and the page is the result.
- *
- * `aria-pressed` rather than a radio group. The semantics are close enough and
- * a radio group brings a keyboard contract with it — arrow keys move the
- * selection, one tab stop for the set — that would be a bug to half-implement.
- * Three toggle buttons are three tab stops and need no keyboard code at all.
+ * Three toggle buttons, so the current preference is always visible. `aria-pressed`
+ * rather than a radio group, which would need arrow-key handling.
  */
 export default function ThemeToggle() {
   const { choose, preference } = useTheme();

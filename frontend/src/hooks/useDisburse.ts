@@ -10,18 +10,9 @@ export interface Disburse {
 }
 
 /**
- * Sending a disbursement, with the idempotency key handled correctly.
- *
- * **The key is generated once per attempt and kept across retries.** That is
- * the entire point of it: if the first request times out, the browser has no
- * way to know whether the payment was authorised, and retrying with a fresh
- * key would tell the server these are two different disbursements. Same key,
- * and the server replays the first answer instead of paying twice.
- *
- * It is regenerated only on success or on an explicit reset — that is, when
- * the operator is starting a genuinely new disbursement. A `useRef` rather
- * than state because nothing renders differently for it, and re-rendering on
- * every keystroke to hold a uuid would be the wrong trade.
+ * Sends a disbursement with one idempotency key per attempt, kept across retries
+ * and replaced only on success or reset. A fresh key per retry would let a timed-out
+ * request be paid twice. See AGENTS.md > Idempotency.
  */
 export default function useDisburse(onDisbursed?: (transfer: Transfer) => void): Disburse {
   const queryClient = useQueryClient();
@@ -38,8 +29,7 @@ export default function useDisburse(onDisbursed?: (transfer: Transfer) => void):
       recipientId: string;
     }) => disburse({ amountMinor, currency, idempotencyKey: key.current, recipientId }),
     onSuccess: async (transfer) => {
-      // A new disbursement from here on: this one is done, and reusing the key
-      // would replay it forever.
+      // Done: reusing the key would replay this one forever.
       key.current = crypto.randomUUID();
       onDisbursed?.(transfer);
       await Promise.all([

@@ -39,13 +39,8 @@ from tests.conftest import ADMIN_DSN, TEST_DB
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
-# Every table the models declare, read from the models rather than listed by
-# hand. A table missing from this list is one whose rows leak from each test
-# into the next, and that is not hypothetical: it was a hand-written list, and
-# `payment_runs` was added to the schema and not to it — so a run created by
-# one test made the next test's "nothing was created" assertion fail, and
-# looked exactly like a transaction that had half-committed. CASCADE resolves
-# the FK order, so the list does not have to be sorted.
+# Every table the models declare, read from the models so a new table cannot
+# be left out and leak rows between tests. CASCADE resolves the order.
 TABLES = ", ".join(table.name for table in Base.metadata.sorted_tables)
 
 

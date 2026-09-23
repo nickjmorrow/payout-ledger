@@ -4,17 +4,14 @@ interface Props {
   /** Show a placeholder the size of the figure rather than a dash. */
   isLoading?: boolean;
   label: string;
-  /** A semantic colour token when the value needs one, e.g. `text-danger`. */
+  /** A semantic color token when the value needs one, e.g. `text-danger`. */
   tone?: string;
   value: string;
 }
 
 /**
- * One figure in a summary row.
- *
- * Loading is a placeholder, not a dash: a dash already means "we could not
- * say", and a balance that reads `—` for the first half-second looks like a
- * fund with nothing in it.
+ * One figure in a summary row. Shows a placeholder while loading, because a dash
+ * would read as an empty fund.
  */
 export default function StatCell({ isLoading = false, label, tone, value }: Props) {
   return (

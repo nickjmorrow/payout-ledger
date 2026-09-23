@@ -1,8 +1,6 @@
 """Typed configuration, read once from the environment.
 
-Everything that varies by environment comes from here. Importing `settings`
-anywhere is fine; calling `os.getenv` anywhere else is not — a typo in an env
-var name should fail at startup with a clear error, not at 2am with a None.
+The only place the environment is read, so a mistyped variable fails at startup.
 """
 
 from functools import lru_cache
@@ -11,13 +9,8 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# The identity every request gets when auth is switched off.
-#
-# Not a Settings field, because it is not environment-dependent: it is the one
-# user that exists when `OIDC_ISSUER` is unset. It lives here rather than beside
-# the auth seam in `api/deps.py` because the worker needs it too — work the
-# worker starts on its own still has to belong to somebody, and a process that
-# serves no HTTP should not import the HTTP layer to find out who.
+# The identity every request gets when auth is off. Here rather than in
+# api/deps.py because the worker needs it too.
 DEV_USER_ID = "dev-user"
 
 
@@ -26,93 +19,65 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://app:app@localhost:5434/app"
 
-    # How long the worker waits on a LISTEN before looking around anyway. It is
-    # woken by NOTIFY the instant a task is enqueued, so this is not the
-    # latency of a job — it is how often dead workers get noticed when nothing
-    # else is happening.
+    # How long an idle worker waits for a NOTIFY before sweeping again. Not job
+    # latency: a NOTIFY wakes it at once.
     worker_idle_seconds: float = 5.0
 
-    # A task claimed and then not finished within this long is assumed to belong
-    # to a worker that died, and goes back on the queue. Must comfortably exceed
-    # your longest real task, or the sweeper will steal live work.
+    # A claimed task older than this is assumed orphaned by a dead worker. Must
+    # exceed the longest real task, or the sweeper steals live work.
     task_stale_seconds: int = 900
 
-    # Touched once per loop pass, so a container healthcheck can tell a worker
-    # that is running from one that is wedged. The worker has no HTTP port, and
-    # "the process exists" is not liveness — Docker already restarts a process
-    # that exits.
-    # S108: a fixed path inside the worker's own container, not a shared
-    # tmpdir on a multi-user host. Override it if that stops being true.
+    # Touched each loop pass, so the healthcheck can tell a wedged worker from a
+    # running one. S108: a fixed path inside the worker's own container.
     worker_heartbeat_path: Path = Path("/tmp/worker-alive")  # noqa: S108
 
-    # Backoff for a task that failed for a reason worth trying again — a
-    # provider timeout, a transient network fault. Doubles per attempt from the
-    # base, capped at the max. Which failures qualify is the handler's call:
-    # see `TaskOutcome.retryable` in worker/handlers.py.
+    # Retry backoff: doubles from the base, capped at the max. Whether a failure
+    # is retryable is the handler's call (`TaskOutcome.retryable`).
     task_retry_base_seconds: float = 5.0
     task_retry_max_seconds: float = 120.0
 
-    # A ceiling on one disbursement, in minor units. Unbounded input is an
-    # unbounded payment, and the number that matters is the one picked on
-    # purpose rather than the one the provider happens to accept. Refused as a
-    # 422 the client can show, long before any money moves.
+    # The largest single payment, in minor units.
     max_transfer_minor: int = 1_000_000_00
 
-    # A ceiling on recipients in one payment run. A run is one transaction, so
-    # its size is how long the funding lock is held and how large one commit
-    # is; past this, split it. Refused as a 422 before anything is posted.
+    # The most recipients in one run. A run is one transaction, so its size is
+    # how long the funding lock is held.
     max_run_size: int = 100
 
-    # Whether to seed demo recipients and an opening balance. The chart of
-    # accounts is seeded regardless — no transfer can be authorised without it,
-    # so that part is setup rather than sample data.
+    # Seed demo recipients and an opening balance. The chart of accounts is always seeded.
     seed_demo_data: bool = True
 
-    # How often the reconciliation pass runs. Short here because the demo
-    # should visibly self-heal; a real deployment would measure this in minutes
-    # and the window it scans in days.
+    # How often reconciliation runs. Short so the demo visibly self-heals.
     reconcile_interval_seconds: int = 30
 
     # ------------------------------------------------------------- provider
     #
-    # The mock provider's behaviour. All three failure hooks default to off:
-    # they exist so the chaos pass has somewhere to plug in, and are not
-    # themselves that pass. Nothing in the application reads them — only
-    # `provider/mock.py`, which is pretending to be somebody else's company.
+    # The mock provider's behavior, read only by `provider/mock.py`. The three
+    # failure hooks default to off.
 
-    # How long a payment sits `pending` before the provider settles it. Not
-    # zero, deliberately: a provider that succeeds synchronously never
-    # exercises the in-flight states the whole async design exists to handle.
+    # How long a payment stays pending before the provider settles it. Not zero,
+    # so the in-flight states are exercised.
     provider_settle_after_seconds: int = 5
 
-    # Every send fails permanently. Simulates a rejected integration — the
-    # kind of failure where retrying cannot help.
+    # Every send fails permanently, as a rejected integration would.
     provider_reject_all: bool = False
 
     # Every send fails retryably. Simulates a network partition or an outage.
     provider_unreachable: bool = False
 
-    # Sends are accepted, then fail at settlement. The nastiest of the three,
-    # because the money looked like it was on its way.
+    # Sends are accepted, then fail at settlement.
     provider_fail_settlement: bool = False
 
     # ---------------------------------------------------------------- auth
     #
-    # Empty issuer means auth is OFF and every request is the dev user — which
-    # is what keeps `docker compose up` working with no accounts anywhere. Set
-    # these and the same endpoints start requiring a token.
-    #
-    # Deliberately not tied to a vendor. Every serious provider speaks OIDC, so
-    # the verification is identical and switching between Clerk, WorkOS, Logto,
-    # Auth0 or a self-hosted issuer is these two values.
+    # An empty issuer turns auth off and every request is the dev user. Any OIDC
+    # provider works; see `api/deps.py`.
     #
     #   oidc_issuer   https://your-tenant.example.com   (no trailing slash)
     #   oidc_audience the API identifier the provider puts in `aud`
     oidc_issuer: str = ""
     oidc_audience: str = ""
 
-    # Defaults to the OIDC discovery convention. Override only if your provider
-    # puts its keys somewhere else.
+    # Defaults to the OIDC discovery convention.
     oidc_jwks_url: str = ""
 
     @property
@@ -128,24 +93,13 @@ class Settings(BaseSettings):
     log_level: Literal["debug", "info", "warning", "error"] = "info"
     log_format: Literal["console", "json"] = "console"
 
-    # Comma-separated, not a list.
-    #
-    # pydantic-settings parses a `list[str]` field from the environment as
-    # JSON, so `CORS_ORIGINS=http://localhost:3000` is a startup crash and
-    # `CORS_ORIGINS=["http://localhost:3000"]` is what it actually wants. That
-    # is a miserable thing to write in a compose file, so the field is a plain
-    # string and the split happens here. Same trap applies to any list- or
-    # dict-typed setting you add.
+    # Comma-separated rather than a list: pydantic-settings would parse a list
+    # field from the environment as JSON.
     cors_origins: str = "http://localhost:3000"
 
     @property
     def database_dsn(self) -> str:
-        """The URL without SQLAlchemy's `+driver` suffix.
-
-        asyncpg is reached two ways here: through SQLAlchemy for everything
-        normal, and directly for LISTEN/NOTIFY, which SQLAlchemy has no API for.
-        The direct path wants a plain libpq URL.
-        """
+        """The URL without `+asyncpg`, for the direct asyncpg connection LISTEN needs."""
         return self.database_url.replace("+asyncpg", "", 1)
 
     @property

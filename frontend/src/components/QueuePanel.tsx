@@ -9,14 +9,9 @@ import { taskLabel } from 'src/labels';
 import { timingOf } from 'src/queue';
 
 /**
- * What the workers have to do, as they do it.
- *
- * The counts split pending work on whether it may run yet, because a dozen
- * settlement checks scheduled a few seconds out is a healthy queue and would
- * look like a backlog if lumped in with work that is late. Below them, every
- * unfinished task with the worker holding it or the time it will run — so a
- * payment run shows as sends being claimed by two workers at once, and the
- * reconciliation pass shows as the one task that is always a few seconds away.
+ * The queue, live: counts, then every unfinished task with its worker or run time.
+ * Pending work is split into due and scheduled, so waiting work does not look
+ * like a backlog.
  */
 export default function QueuePanel() {
   const { data: queue, error, isPending } = useQueue();

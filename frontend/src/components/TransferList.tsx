@@ -15,13 +15,8 @@ interface Props {
 }
 
 /**
- * Disbursements, newest first — all of them, or one run's. Click one for its
- * history.
- *
- * The recipient's name is the control rather than the whole row, because a
- * row is not a button: it cannot take focus, a screen reader will not announce
- * it as something to press, and a click on the status pill to copy a reference
- * would open a drawer instead. One real button per row costs nothing.
+ * Disbursements, newest first: all of them, or one run's. The recipient's name is
+ * a button that opens the transfer's history.
  */
 export default function TransferList({ onClearRun, runId }: Props) {
   const { data: transfers, error, isPending } = useTransfers(runId);
@@ -97,8 +92,7 @@ export default function TransferList({ onClearRun, runId }: Props) {
               >
                 <td className={'px-4 py-2 text-ink'}>
                   <button
-                    // Underlined at rest, not only on hover: the name is the way
-                    // into this transfer's history, and nothing else says so.
+                    // Underlined at rest, so it reads as a link.
                     className={
                       'text-left font-medium underline decoration-ink/30 underline-offset-4 transition hover:decoration-ink'
                     }

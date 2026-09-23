@@ -1,10 +1,4 @@
-"""Payment runs: many disbursements, authorised as one decision.
-
-Same shape as `transfers.create` and for the same reasons — an
-`Idempotency-Key` is required, and everything happens in one transaction. The
-difference is scale: one request authorises every transfer in the run or none,
-which is the whole of what makes a run safe to retry. See `run_service`.
-"""
+"""Payment runs: authorize every transfer in a run or none. Requires an Idempotency-Key."""
 
 from typing import Annotated, Any
 
@@ -30,13 +24,7 @@ async def create(
     _user: CurrentUser,
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=8)],
 ) -> ApiResponse[RunOut]:
-    """Authorise every transfer in a run and queue them to be sent — or none of them.
-
-    A retry with the same key replays the first response rather than
-    authorising the run a second time. Without the key, a timeout on this
-    request is the most expensive one in the system: the client cannot tell
-    whether forty people were paid, and asking again would pay them twice.
-    """
+    """Authorize every transfer in a run and queue them to be sent, or none of them."""
     payload: dict[str, Any] = body.model_dump(mode="json", by_alias=True)
     replay = await claim_or_replay(
         session, key=idempotency_key, endpoint=ENDPOINT, body=payload, response=response
@@ -75,8 +63,7 @@ async def create(
         body=out.model_dump(mode="json", by_alias=True),
     )
 
-    # The one commit: the run, every transfer, every journal, every queued
-    # payment and the idempotency record, together.
+    # The one commit: everything above lands together.
     await session.commit()
     return ApiResponse(data=out)
 

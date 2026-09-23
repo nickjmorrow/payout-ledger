@@ -1,34 +1,9 @@
-"""A mobile-money provider that lives in our own database.
+"""A payment provider that lives in our own database, standing in for an external API.
 
-**This file is pretending to be somebody else's company.** It is the only
-thing that may write `provider_payments`, and nothing outside `app/provider/`
-may read that table — the rest of the application reaches it through
-`PaymentProvider`, exactly as it would reach an HTTP API. Both rules are
-checked by a structural test, because the moment a service reads their table
-directly, reconciliation starts comparing our records to our records.
-
-It runs on its own session rather than the caller's, for the same reason. A
-real provider does not enlist in your transaction: it commits when it commits,
-and your rollback does not unsend a payment. Sharing the caller's session would
-quietly give the mock a property the real thing cannot have — and every test
-written against that property would pass here and fail in production.
-
-Payments do not settle instantly. `send_payment` records a `pending` payment
-and returns; it becomes `succeeded` once it is old enough. That gap is
-deliberate — a provider that succeeds synchronously never exercises the states
-(in flight, settled later, never settled) the whole async design exists to
-handle.
-
-**Settlement happens lazily, inside `get_payment` and `list_payments`.** That
-is not a shortcut, it is the point: a real provider settles on its own schedule
-and offers no way to make it happen sooner, so nothing in this application may
-be able to *cause* a settlement. If the worker had to call `advance_pending` on
-a timer, the app would be driving the provider's clock — and every test written
-against that ability would pass here and fail against a real integration. Time
-passing is the only trigger, and asking is the only way to find out.
-
-The failure hooks at the bottom default to off. They exist so the chaos pass
-has somewhere to plug in, and are not themselves that pass.
+The only writer of `provider_payments`. It uses its own session, as a real
+provider would not share our transaction, and settles lazily on time passing,
+so nothing in the application can cause a settlement. The failure hooks in
+config.py default to off. See AGENTS.md > The provider seam.
 """
 
 import secrets
@@ -44,8 +19,7 @@ from app.provider.base import ProviderError, ProviderPaymentView
 
 logger = get_logger(__name__)
 
-# The prefix on every reference they hand back. Distinctive so a reference that
-# turns up somewhere unexpected is obviously theirs and not ours.
+# Makes their references recognizable as theirs.
 REFERENCE_PREFIX = "MM"
 
 
@@ -80,9 +54,7 @@ class MockProvider:
             raise ProviderError("provider unreachable", retryable=True)
 
         async with SessionFactory() as session:
-            # Their dedupe, not ours. A repeat of the same key returns the
-            # original payment rather than making a second one, which is the
-            # property that makes our retries safe.
+            # Their dedupe: a repeated key returns the original payment.
             existing = await session.execute(
                 select(ProviderPayment).where(ProviderPayment.idempotency_key == idempotency_key)
             )
@@ -115,8 +87,7 @@ class MockProvider:
             return _view(payment)
 
     async def get_payment(self, *, reference: str) -> ProviderPaymentView | None:
-        # Settle first, so the answer reflects the passage of time rather than
-        # whenever somebody last ran a job. See the module docstring.
+        # Settle first, so the answer reflects the time that has passed.
         await self.advance_pending()
         async with SessionFactory() as session:
             row = await session.get(ProviderPayment, reference)
@@ -134,18 +105,11 @@ class MockProvider:
 
     # ------------------------------------------------------------ mock only
     #
-    # Not part of `PaymentProvider`. Called by the two reads above and by
-    # tests, and by nothing else — a structural test keeps this module
-    # unimportable from outside `app/provider/` precisely so that application
-    # code cannot reach it.
+    # Not part of `PaymentProvider`. A structural test keeps this module out of
+    # reach of application code.
 
     async def advance_pending(self) -> int:
-        """Settle pending payments that are old enough. Returns how many moved.
-
-        Stands in for the provider's own clock. Idempotent and safe to call on
-        every read: it only touches rows whose settle time has passed, so
-        calling it twice in a row does nothing the second time.
-        """
+        """Settle pending payments old enough to settle. Idempotent. Returns how many moved."""
         cutoff = datetime.now(UTC) - timedelta(seconds=settings.provider_settle_after_seconds)
 
         async with SessionFactory() as session:

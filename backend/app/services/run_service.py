@@ -1,25 +1,8 @@
-"""Payment runs: many disbursements, authorised as one decision.
+"""Payment runs: many disbursements authorized as one decision.
 
-**All or nothing.** A run is every one of its transfers or none of them. That
-is not a policy layered on top — it falls out of doing the whole run in one
-transaction: N calls to `transfer_service.initiate`, each posting its own
-journal and enqueueing its own payment, committed together by the caller. A
-run that fails on its seventh recipient leaves no trace of the first six,
-because they were never visible to anyone.
-
-The alternative, partial runs, sounds kinder and is worse. An operator who
-asked to pay forty people and was told "twenty-three authorised, see errors"
-now has to work out which seventeen to retry, with a fund that has moved
-underneath them, and the chance of paying somebody twice is the chance they
-get that list wrong.
-
-**The fund is checked for the whole run before any of it is posted.** Each
-`initiate` would refuse the transfer that tipped the fund over anyway, and the
-transaction would roll back — correctly, but with an error about one
-recipient when the truth is about the total. Checking the sum first, under the
-same lock, gives the operator the number they need.
-
-A run's progress and total are derived from its transfers. See `PaymentRun`.
+All or nothing, because the whole run is one transaction, and the fund is
+checked for the run's total before anything is posted. See AGENTS.md >
+Payment runs.
 """
 
 import uuid
@@ -45,12 +28,7 @@ class EmptyRunError(RunError):
 
 
 class DuplicateRecipientError(RunError):
-    """The same person twice in one run.
-
-    Refused rather than merged or allowed. Paying one recipient twice in a
-    cycle is almost always a mistake in whatever list the run was built from,
-    and the cheapest moment to catch that is before either payment exists.
-    """
+    """The same person twice in one run, which is almost always a mistake in the list."""
 
 
 @dataclass(frozen=True)
@@ -91,10 +69,8 @@ async def initiate(
     funding = await ledger_service.system_account(
         session, kind="program_funding", currency=currency
     )
-    # The same lock `transfer_service.initiate` takes, taken first so the total
-    # and every transfer after it are decided against one balance. Postgres row
-    # locks are re-entrant within a transaction, so each `initiate` below
-    # re-taking it costs nothing and blocks nothing.
+    # The lock `initiate` takes, taken first so the total and every transfer are
+    # decided against one balance. Row locks are re-entrant within a transaction.
     await ledger_service.lock_account(session, account_id=funding.id)
     available = await ledger_service.balance(session, account_id=funding.id)
     if available < total:
@@ -147,12 +123,7 @@ async def summary(session: AsyncSession, *, run_id: uuid.UUID) -> RunSummary | N
 
 
 async def _summarise(session: AsyncSession, runs: list[PaymentRun]) -> list[RunSummary]:
-    """Count each run's transfers by status, in one query for all of them.
-
-    Two queries rather than one join: the runs, then one GROUP BY over their
-    transfers. A join would return a row per transfer and count in Python; this
-    counts in Postgres, on `transfers_run_idx`, and returns a row per status.
-    """
+    """Count each run's transfers by status with one GROUP BY for all of them."""
     summaries = {run.id: RunSummary(run=run) for run in runs}
     if not summaries:
         return []

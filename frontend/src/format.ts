@@ -1,16 +1,9 @@
-/**
- * Small display formatters. Pure, no React, so they are tested without a
- * renderer.
- */
+/** Display formatters. Pure, no React. */
 
 const SECOND_MS = 1000;
 const MINUTE_MS = 60 * SECOND_MS;
 
-/**
- * `"Sep 23, 6:24 PM"`, in the reader's own zone. The date is not optional in a
- * list that outlives a day: "6:24 PM" alone leaves an operator guessing which
- * evening.
- */
+/** `"Sep 23, 6:24 PM"`, in the reader's zone. The date matters in a list that outlives a day. */
 export function formatTime(iso: string): string {
   return new Date(iso).toLocaleString('en-US', {
     day: 'numeric',
@@ -20,12 +13,7 @@ export function formatTime(iso: string): string {
   });
 }
 
-/**
- * Clock time to the second, for a history where the order of events matters.
- *
- * A send and its settlement check can be three seconds apart; to the minute
- * they are the same moment, and a reader cannot tell which came first.
- */
+/** Time to the second, for a history where events seconds apart must read in order. */
 export function formatClock(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-US', {
     hour: '2-digit',
@@ -35,13 +23,9 @@ export function formatClock(iso: string): string {
 }
 
 /**
- * How far a moment is from `now`, in the coarsest unit that still says
- * something: "in 12s", "3m ago", "just now".
+ * How far a moment is from `now`: "in 12s", "3m ago", "just now".
  *
- * `now` is a parameter rather than `Date.now()` so the function is a pure
- * one of its inputs and a test can pin an answer. A scheduled task's `run_at`
- * is the thing this exists for — an operator wants "in 25s" beside a settlement
- * check, not a timestamp to subtract in their head.
+ * `now` is a parameter so a test can pin it.
  */
 export function formatRelative(iso: string, now: number): string {
   const delta = new Date(iso).getTime() - now;
@@ -55,11 +39,7 @@ export function formatRelative(iso: string, now: number): string {
   return delta > 0 ? `in ${span}` : `${span} ago`;
 }
 
-/**
- * `+12025550101` -> `"(202) 555-0101"`. A US number reads the way it is said;
- * anything else is shown as stored, because guessing another country's
- * grouping is worse than not grouping.
- */
+/** `+12025550101` -> `"(202) 555-0101"`. Other countries' numbers are shown as stored. */
 export function formatPhone(msisdn: string): string {
   const us = /^\+1(\d{3})(\d{3})(\d{4})$/.exec(msisdn);
   return us ? `(${us[1] ?? ''}) ${us[2] ?? ''}-${us[3] ?? ''}` : msisdn;

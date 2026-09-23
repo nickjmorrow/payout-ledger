@@ -1,40 +1,14 @@
-"""Structural tests: the conventions, checked by a machine.
+"""Structural tests: the conventions in AGENTS.md, checked by a machine.
 
-Most of AGENTS.md is prose, and prose is not enforced by anything. That is not
-a hypothetical worry — it already happened twice in this repo. `MessageList.tsx`
-grew to three components while the doc said one, and `routes/schedules.py` built
-its own queries while the doc said routes call services. Both were written down
-from the start. Neither was checked.
+Each asserts on the shape of the codebase (which module may import what, which
+functions take which arguments) where the drift is costly and the check is a
+regex or an AST walk. Nothing here duplicates ruff, basedpyright or eslint.
 
-A structural test asserts on the *shape of the codebase* rather than on what it
-computes: which module may import what, which functions take which arguments,
-whether two files that must change together did. It is a linter rule that was
-too repo-specific to be a linter rule.
+Write each failure message as an argument, not an assertion: the person who
+hits it is deciding whether the rule or their code is wrong.
 
-Several of the rules that used to live here belonged to the chat template this
-was forked from — the provider seam, the tool contract, the stream-event
-union — and left with the code they guarded. The ones below are the ones that
-are still about this codebase.
-
-**What belongs here.** A rule where the cost of the drift is high and the cost
-of the check is a regex or an AST walk: the config boundary, the import
-direction, the handler registry. Every test below names the section of AGENTS.md
-it enforces.
-
-**Write the failure message as an argument, not an assertion.** The person who
-hits one of these at 11pm is deciding whether the rule or their code is wrong,
-and needs the reason in order to decide.
-
-**What does not.** Anything `ruff`, `basedpyright` or `eslint` already catches —
-duplicating them is a second place to update. Anything stylistic; a test that
-fails because a file was renamed sensibly teaches people to delete tests.
-Anything behavioural, which is what the rest of the suite is for.
-
-**Frontend-only rules live in `frontend/src/structure.test.ts`,** not here: a
-frontend developer running `pnpm test` should see them fail.
-
-These tests need no database and no network, so the pre-commit hook can run them
-on every commit. Keep it that way.
+Frontend-only rules live in `frontend/src/structure.test.ts`. These tests need
+no database, so the pre-commit hook runs them on every commit.
 """
 
 import ast

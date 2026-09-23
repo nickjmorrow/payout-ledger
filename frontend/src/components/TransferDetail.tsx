@@ -17,19 +17,9 @@ interface Props {
 }
 
 /**
- * Everything that happened to one transfer, in a drawer beside the list.
- *
- * Two histories, side by side. The worker's — each send and settlement check,
- * with its attempt count and whatever error it hit — is how a payment took
- * four minutes. The books' — each journal entry, lines and totals — is what
- * that did to the money. A failed transfer shows both the authorisation and
- * the reversal, because the reversal did not delete anything: that is what
- * append-only looks like from the outside.
- *
- * A modal drawer rather than a page: the list stays in view, dimmed, so the
- * operator keeps their place. Escape or a click outside closes it
- * (`useDismiss`), and focus moves in on open and back on close
- * (`useFocusTrap`), so it works from the keyboard as well as the mouse.
+ * One transfer's history in a modal drawer: the worker's attempts and the journal
+ * entries they posted. A failed transfer shows both the authorization and its
+ * reversal, because the ledger is append-only.
  */
 export default function TransferDetail({ id, onClose }: Props) {
   const ref = useRef<HTMLElement>(null);

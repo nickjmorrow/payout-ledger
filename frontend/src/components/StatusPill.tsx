@@ -5,12 +5,8 @@ interface Props {
 }
 
 /**
- * A state, coloured by what it means rather than by its name.
- *
- * `processing` and `running` read as pending and not as success, deliberately:
- * the money has been promised and has not arrived, and showing that in the
- * same colour as `succeeded` would tell an operator the payment landed when it
- * has not.
+ * A status, colored by meaning. `processing` and `running` use the pending color:
+ * the money has not arrived yet.
  */
 const TONE: Record<TaskStatus | TransferStatus, string> = {
   failed: 'bg-danger/10 text-danger',

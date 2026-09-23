@@ -5,13 +5,8 @@ interface Props {
 }
 
 /**
- * A read that failed, said plainly instead of looking empty.
- *
- * The difference matters most on the panels whose empty state is good news:
- * "Nothing to report" under Reconciliation, or no dead letters, shown because
- * the request failed rather than because nothing is wrong, is the console
- * telling an operator the opposite of the truth. The query keeps retrying on
- * its own cadence, so this clears by itself when the API is back.
+ * A failed read, stated plainly, so a panel whose empty state is good news never
+ * shows that state by mistake. Clears when the query's retries succeed.
  */
 export default function LoadFailed({ error, what }: Props) {
   return (

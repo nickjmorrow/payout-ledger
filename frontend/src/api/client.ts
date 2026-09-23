@@ -1,11 +1,8 @@
 import { authHeaders } from 'src/api/auth';
 
 /**
- * The HTTP boundary.
- *
- * Every non-streaming request goes through `apiFetch`, which knows two things
- * so no caller has to: responses are wrapped in `{ data, meta }`, and a
- * non-2xx status is an error rather than a value.
+ * The HTTP boundary. `apiFetch` unwraps `{ data, meta }` and turns a non-2xx
+ * status into an `ApiError`.
  */
 
 export interface ApiEnvelope<T> {
@@ -26,12 +23,8 @@ export class ApiError extends Error {
 /**
  * The human-readable message out of an error response.
  *
- * FastAPI puts it in `detail` in two shapes: a string for an `HTTPException`,
- * and an *array* of per-field errors for a request that failed validation —
- * which is where the per-payment cap is refused, so the array is read too,
- * not skipped. A failure from in front of the app (a proxy, a dead upstream)
- * has no JSON at all, and over HTTP/2 no status text either, so the last
- * resort names the status rather than showing an empty banner.
+ * FastAPI's `detail` is a string, or an array of validation errors. With no body
+ * and no status text (HTTP/2 has none), name the status rather than show nothing.
  */
 export async function errorDetail(response: Response): Promise<string> {
   const body: unknown = await response.json().catch(() => null);
@@ -49,11 +42,8 @@ export async function errorDetail(response: Response): Promise<string> {
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  // Built with `Headers` rather than object spread. `RequestInit['headers']`
-  // is allowed to be a `Headers` instance or an array of [name, value] pairs
-  // as well as a plain object, and spreading either of those into an object
-  // literal silently yields nothing useful instead of headers. Precedence is
-  // unchanged: content type, then auth, then whatever the caller passed.
+  // `Headers` rather than object spread: `init.headers` may be a `Headers` or an
+  // array, which spreading silently drops. Content type, then auth, then the caller's.
   const headers = new Headers({ 'Content-Type': 'application/json' });
   const auth = await authHeaders();
   for (const [name, value] of Object.entries(auth)) headers.set(name, value);

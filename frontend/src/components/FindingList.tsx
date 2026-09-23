@@ -7,13 +7,8 @@ import { formatTime } from 'src/format';
 import usePollInterval from 'src/hooks/usePollInterval';
 
 /**
- * What reconciliation found, and whether it fixed it.
- *
- * Healed findings stay on the list rather than disappearing. A finding is a
- * fact about a moment, not a ticket — what it records is that the two systems
- * disagreed, and that remains true after the disagreement is resolved. An
- * operator asking "has this been drifting all week" needs the healed ones to
- * still be there.
+ * What reconciliation found, and whether it healed it. Healed findings stay: each
+ * is a fact about a moment. See AGENTS.md > Reconciliation.
  */
 export default function FindingList() {
   const {
@@ -37,8 +32,7 @@ export default function FindingList() {
     );
   }
 
-  // After the loading check, no data means the read failed. Saying "nothing
-  // to report" here would be good news the console has no grounds for.
+  // No data after loading is a failed read, not "nothing to report".
   if (findings === undefined) {
     return <LoadFailed error={error} what={'reconciliation findings'} />;
   }

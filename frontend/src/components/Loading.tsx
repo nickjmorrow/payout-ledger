@@ -8,11 +8,8 @@ interface Props {
 }
 
 /**
- * A region that is still loading, said once for assistive technology.
- *
- * `aria-busy` tells a screen reader not to announce the region's contents
- * while they are placeholders, and the visually hidden label says what is
- * coming. The skeletons inside carry no meaning of their own.
+ * A loading region: `aria-busy` plus a visually hidden label, so screen readers
+ * skip the skeletons inside.
  */
 export default function Loading({ children, label }: Props) {
   return (

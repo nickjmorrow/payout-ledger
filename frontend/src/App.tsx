@@ -13,19 +13,13 @@ import TransferList from 'src/components/TransferList';
 import useLiveUpdates from 'src/hooks/useLiveUpdates';
 
 /**
- * The disbursement console.
- *
- * One page on purpose. The whole job is: see what the programme has, send some
- * of it to somebody, watch it land, and be told when the books and the
- * provider stop agreeing. Splitting that across routes would mean an operator
- * had to know where to look for a problem, when the point is to be shown it.
+ * The disbursement console. One page, so an operator is shown a problem rather
+ * than having to know where to look for it.
  */
 export default function App() {
   // Once, for the whole page: one stream, and every query kept current by it.
   useLiveUpdates();
-  // Which payment run the transfer list is narrowed to. Here because two
-  // sections share it: choosing a run filters the list below, and creating
-  // one selects it so the operator watches the run they just authorised.
+  // The run the transfer list is narrowed to. Creating a run selects it.
   const [runId, setRunId] = useState<null | string>(null);
 
   return (

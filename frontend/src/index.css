@@ -1,5 +1,4 @@
-/* Tailwind v4: one import, no config file, no postcss. Customization goes in
-   an @theme block here rather than a tailwind.config.js. */
+/* Tailwind v4: customization lives in @theme, not a config file. */
 @import 'tailwindcss';
 
 @theme {
@@ -8,26 +7,18 @@
   --color-ink: oklch(0.22 0.01 260);
   --color-ink-muted: oklch(0.55 0.015 260);
   --color-accent: oklch(0.55 0.15 260);
-  /* What is legible ON the accent, which is not `surface` and is not white in
-     every theme. Named for its job so a component never has to know which. */
+  /* Text on the accent, in either theme. */
   --color-on-accent: oklch(0.99 0 0);
   --color-danger: oklch(0.52 0.2 25);
-  /* A transfer that landed, and one still moving. Named for the meaning rather
-     than the hue so the dark block below can shift both without any component
-     knowing. */
+  /* A transfer that landed, and one still moving. */
   --color-success: oklch(0.52 0.13 150);
   --color-pending: oklch(0.58 0.12 75);
   /* Behind a modal: dims the page without hiding it. */
   --color-scrim: oklch(0.22 0.01 260 / 0.25);
 }
 
-/* One dark block, keyed off an attribute rather than `prefers-color-scheme`.
-   `useTheme` resolves the three-way preference — light, dark, follow the OS —
-   and writes the *answer* to `<html data-theme>`, so this file never has to
-   express "dark unless the user explicitly chose light", which a media query
-   alone cannot say. The inline script in index.html writes the same attribute
-   before React exists, which is what stops a light flash on load; keep the two
-   in step. */
+/* Keyed off `data-theme`, which `useTheme` (and the inline script in
+   index.html, before React loads) sets from the resolved preference. */
 :root[data-theme='dark'] {
   --color-surface: oklch(0.19 0.008 260);
   --color-surface-raised: oklch(0.24 0.01 260);

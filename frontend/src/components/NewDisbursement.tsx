@@ -14,12 +14,8 @@ interface Props {
 }
 
 /**
- * The two ways to authorise money: to one person, or to many as one decision.
- *
- * Two forms rather than one that grows a list, because they are not the same
- * request. A one-off is a transfer; a run is all-or-nothing across every
- * recipient, and the operator should know which of those they are about to do
- * before they press the button.
+ * Pay one recipient, or authorize a payment run to many as one all-or-nothing
+ * decision. Two forms, because they are different requests.
  */
 export default function NewDisbursement({ onRunCreated }: Props) {
   const [mode, setMode] = useState<Mode>('one');

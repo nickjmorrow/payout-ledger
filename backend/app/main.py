@@ -1,8 +1,4 @@
-"""Application entry point.
-
-Deliberately thin: configure logging, mount middleware, include routers. Any
-logic that shows up here belongs in a service.
-"""
+"""Application wiring: logging, middleware, routers. No logic."""
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -30,19 +26,16 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     await bus.start()
     yield
     await bus.stop()
-    # Without this, shutdown leaves connections open and the container takes
-    # its full grace period to die on every restart.
+    # Close pooled connections, or the container waits out its grace period.
     await engine.dispose()
     logger.info("app stopped")
 
 
 app = FastAPI(title="Payout Ledger", version="0.1.0", lifespan=lifespan)
 
-# Only needed if you run the frontend outside Docker against this directly. In
-# the compose setup Vite proxies /api, so requests are same-origin and this
-# never fires.
-# Outermost, so its context is bound before anything else runs and its access
-# log sees the status CORS or a handler actually produced.
+# Outermost, so the request id is bound before anything else runs. CORS
+# matters only when the frontend runs outside Docker; in compose, /api is
+# same-origin.
 app.add_middleware(RequestContextMiddleware)
 
 app.add_middleware(
@@ -62,12 +55,6 @@ app.include_router(events.router, prefix="/api")
 
 @app.exception_handler(Exception)
 async def unhandled_exception(request: Request, exc: Exception) -> JSONResponse:
-    """Turn an unhandled error into one log line and one shaped response.
-
-    Without this, Starlette returns a bare 500 with nothing in the log that
-    structlog ever saw — so the one class of failure you most need to find out
-    about is the one that leaves no record. `exc_info` puts the traceback where
-    the request id already is.
-    """
+    """Turn an unhandled error into one logged traceback and one shaped 500."""
     logger.error("unhandled error", path=request.url.path, exc_info=exc)
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})

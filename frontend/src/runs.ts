@@ -1,11 +1,4 @@
-/**
- * A payment run's progress, in an operator's words. Pure, no React.
- *
- * The API counts a run's transfers by status; this turns those counts into
- * what a person asks of a run — how many were paid, how many are still moving,
- * did any fail, is it finished — without any of that being stored anywhere to
- * go out of date.
- */
+/** A payment run's progress, in an operator's words. Pure, no React. */
 
 import type { TransferStatus } from 'src/api/ledger';
 
@@ -36,12 +29,7 @@ export function progressOf(byStatus: Partial<Record<TransferStatus, number>>): R
   };
 }
 
-/**
- * `"18 of 24 paid · 4 in flight · 2 failed"`.
- *
- * Zero counts are left out rather than shown, so a clean run reads as one
- * clause and a failure is never lost in a list of zeroes.
- */
+/** `"18 of 24 paid · 4 in flight · 2 failed"`, leaving out zero counts. */
 export function describeProgress(progress: RunProgress): string {
   const clauses: [number, string][] = [
     [progress.inFlight, 'in flight'],

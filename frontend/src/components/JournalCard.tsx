@@ -8,13 +8,8 @@ interface Props {
 }
 
 /**
- * One posting, laid out the way a bookkeeper would: a debit column and a
- * credit column, one line per account, totals underneath.
- *
- * Both totals are shown even though they are always equal. That is not
- * redundancy — it is the point. A journal is the unit the books balance *at*,
- * and a reader who can see the two columns agree has seen the invariant
- * rather than been told about it.
+ * One journal entry as a bookkeeper lays it out: debits, credits, and both totals,
+ * so the reader sees the entry balance.
  */
 export default function JournalCard({ journal }: Props) {
   const debits = journal.lines.filter((line) => line.direction === 'debit');

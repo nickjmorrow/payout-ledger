@@ -5,17 +5,11 @@ import usePollInterval from 'src/hooks/usePollInterval';
 import { formatMoney } from 'src/money';
 
 /**
- * The programme at a glance: what is left to give away, what is still held at
- * the provider, and whether anything needs a person.
- *
- * One query rather than three, because these numbers are read together — a
- * fund balance from one moment beside a float balance from another reads, for
- * a ledger, as the books not adding up.
+ * The program at a glance: the fund, the float at the provider, and whether
+ * anything needs a person. One query, so the numbers are from one moment.
  */
 export default function Overview() {
-  // The shared cadence: these balances move when the worker settles something
-  // in the background, and refreshing on an independent schedule would show a
-  // settled transfer beside a float balance from before it settled.
+  // The shared cadence, so these balances refresh with the transfer list.
   const { data, isPending } = useQuery({
     queryFn: getOverview,
     queryKey: ledgerKeys.overview,
@@ -25,9 +19,7 @@ export default function Overview() {
   const fund = data?.accounts.find((account) => account.kind === 'program_funding');
   const float = data?.accounts.find((account) => account.kind === 'provider_settlement');
 
-  // Always zero. Shown rather than hidden because a non-zero value means a
-  // database trigger has gone missing, and nothing else in the product would
-  // ever say so.
+  // Always zero. Non-zero means a ledger trigger has gone missing.
   const areBooksBalanced = data?.trialBalanceMinor === 0;
   const needsAttention = (data?.unresolvedFindings ?? 0) + (data?.deadLettered ?? 0);
 

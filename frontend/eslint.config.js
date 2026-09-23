@@ -10,18 +10,8 @@ import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier';
 
 /**
- * The frontend's half of the contract in AGENTS.md.
- *
- * The backend has had `ruff` since the beginning; this is its counterpart, and
- * it is built the same way: take the broad recommended set, then turn off
- * individual rules with a note saying why. An `off` with a reason is a decision
- * someone can argue with later. A short `select` list is a decision nobody
- * recorded.
- *
- * About half of the contract is mechanical and lives here. The other half
- * ("server state is TanStack Query", "every view refreshes in the same moment")
- * is judgement a linter cannot express, and lives in AGENTS.md > Frontend.
- * Neither replaces the other.
+ * The frontend's half of the contract in AGENTS.md. Like ruff on the backend: the
+ * broad recommended sets, with individual rules turned off and a note saying why.
  */
 export default tseslint.config(
   { ignores: ['dist', 'node_modules'] },
@@ -43,9 +33,7 @@ export default tseslint.config(
     rules: {
       // ---- AGENTS.md rules, enforced ------------------------------------
 
-      // "Absolute imports only (`src/api/client`). Relative paths stop being
-      // readable three directories in." The backend's `ban-relative-imports`
-      // is the same rule on the other side of the wire.
+      // Absolute imports only (`src/api/client`), as on the backend.
       'no-restricted-imports': [
         'error',
         {
@@ -58,9 +46,7 @@ export default tseslint.config(
         },
       ],
 
-      // "SSE uses `fetch` + `ReadableStream`, never `EventSource`" —
-      // EventSource cannot POST and cannot set headers, so it cannot carry the
-      // token that `src/api/auth.ts` exists to supply.
+      // EventSource cannot set headers, so it cannot carry the auth token.
       'no-restricted-globals': [
         'error',
         {
@@ -70,27 +56,18 @@ export default tseslint.config(
         },
       ],
 
-      // The `void queryClient.invalidateQueries(...)` spelling already in the
-      // code is this rule being followed by hand. Now it is checked.
       '@typescript-eslint/no-floating-promises': 'error',
 
-      // Types are imported as types, so a type-only import can never pull a
-      // module into the bundle at runtime.
+      // Type-only imports never pull a module into the bundle.
       '@typescript-eslint/consistent-type-imports': [
         'error',
         { fixStyle: 'inline-type-imports', prefer: 'type-imports' },
       ],
 
-      // A server logs; a browser app in production should not be narrating to
-      // the console. `console.error` stays for the ErrorBoundary, which is the
-      // only record that exists when a render throws.
+      // `console.error` stays for the ErrorBoundary.
       'no-console': ['error', { allow: ['error'] }],
 
-      // ---- Ordering ------------------------------------------------------
-      //
-      // Already universal in `src/` — every object literal passed before this
-      // was switched on. Worth enforcing precisely because it is arbitrary:
-      // nobody should spend a review comment on it.
+      // ---- Ordering ----------------------------------------------------------
       'perfectionist/sort-imports': [
         'error',
         {
@@ -104,16 +81,12 @@ export default tseslint.config(
       'perfectionist/sort-named-imports': ['error', { type: 'alphabetical' }],
       'perfectionist/sort-objects': ['error', { type: 'alphabetical' }],
 
-      // NOT enabled: sort-interfaces / sort-object-types. The wire shapes in
-      // `src/api/ledger.ts` mirror the field order of the Pydantic
-      // models in `backend/app/api/schemas.py`, and keeping the two greppable
-      // side by side is worth more than alphabetising them.
+      // Not sort-interfaces: the wire types in `src/api/ledger.ts` keep the field
+      // order of `backend/app/api/schemas.py`.
 
       // ---- Accommodations, with reasons ----------------------------------
 
-      // Effect cleanups are `() => clearTimeout(t)` and `() => controller.abort()`.
-      // That shorthand is the React idiom; the rule's real target is a
-      // non-void function that returns a void call by accident.
+      // Allows effect cleanups like `() => clearTimeout(t)`.
       '@typescript-eslint/no-confusing-void-expression': ['error', { ignoreArrowShorthand: true }],
 
       // `?since=${seq}` is a number in a URL, which is the normal case.
@@ -127,71 +100,49 @@ export default tseslint.config(
 
       // ---- unicorn: off, and why -----------------------------------------
 
-      // `null` is the wire format. The backend sends `null` for a transfer not
-      // yet sent, a task with no error, a one-off outside any run; `undefined` does
-      // not survive JSON. Swapping them would make the TypeScript types stop
-      // describing what actually arrives.
+      // `null` is what the backend sends; `undefined` does not survive JSON.
       'unicorn/no-null': 'off',
 
-      // Would rename `props` to `properties` and `ref` to `reference`. Those
-      // are React's own vocabulary, not abbreviations we chose.
+      // `props` and `ref` are React's vocabulary.
       'unicorn/name-replacements': 'off',
 
-      // Fires on `break` inside a `switch` that happens to sit inside a `for`,
-      // which is exactly the shape of the fold in `src/turns.ts`. Extracting
-      // the switch into a function to satisfy it would make that fold harder
-      // to read, not easier.
+      // `break` in a `switch` inside a loop, as in `keysToInvalidate`, is fine.
       'unicorn/no-break-in-nested-loop': 'off',
 
-      // Wants every one-line `/** ... */` expanded to three lines. The concise
-      // form is used deliberately for short field notes.
+      // One-line `/** ... */` field notes are intended.
       'unicorn/single-line-block-comment-style': 'off',
 
-      // Both prefer a shape this codebase chose against: an early return for
-      // the uninteresting case, then the body unindented.
       'unicorn/prefer-ternary': 'off',
       'unicorn/prefer-early-return': 'off',
 
-      // Browser-only app. `window.location` says where it runs; `globalThis`
-      // is for code that has to work in both.
+      // Browser-only.
       'unicorn/prefer-global-this': 'off',
 
       // `getElementById` is not worse than `querySelector('#id')`.
       'unicorn/prefer-query-selector': 'off',
 
-      // `reduce` is the right tool for `lastSeq`, and this rule is contentious
-      // enough that it should not be decided by a default.
+      // `reduce` is clear for a sum, as in `JournalCard`.
       'unicorn/no-array-reduce': 'off',
 
-      // `[...map.values()].sort(...)` already sorts a fresh array, so the
-      // mutation these warn about cannot happen. `toSorted` and
-      // `Iterator.toArray` buy nothing here.
-      'unicorn/no-array-sort': 'off',
+      // `[...map.values()]` reads as well as `Iterator#toArray`.
       'unicorn/prefer-iterator-to-array': 'off',
 
-      // The module-level `provider` in `src/api/auth.ts` IS the seam — one
-      // mutable slot a host app fills at startup. That is the documented design.
+      // The module-level `provider` in `src/api/auth.ts` is the auth seam.
       'unicorn/no-top-level-assignment-in-function': 'off',
 
-      // `response.json().catch(() => null)` is clearer than the try/await form
-      // for "parse it if you can, otherwise nothing".
+      // `response.json().catch(() => null)` is clearer than try/await.
       'unicorn/prefer-await': 'off',
 
-      // The two guards in the reattach effect are separate because they are
-      // separate reasons, each with its own comment, and the second reads a
-      // field the first proves is there. Merging them with `||` loses both.
+      // Separate guards, each with its own reason, as in `parseMajor`.
       'unicorn/prefer-simple-condition-first': 'off',
       'unicorn/prefer-combined-guards': 'off',
 
       // ---- unicorn: configured rather than disabled ----------------------
 
-      // Enforces the AGENTS.md naming rule instead of unicorn's kebab-case
-      // default: `RunList.tsx` for a component, `useLiveUpdates.ts` for a
-      // hook, `money.ts` for a module.
+      // `RunList.tsx`, `useLiveUpdates.ts`, `money.ts`.
       'unicorn/filename-case': ['error', { cases: { camelCase: true, pascalCase: true } }],
 
-      // `caught`, not `error` — there is already an `error` in scope in the
-      // places this matters, and shadowing it is how you log the wrong one.
+      // `caught`, so it never shadows a query's `error`.
       'unicorn/catch-error-name': ['error', { name: 'caught' }],
     },
   },
@@ -202,23 +153,14 @@ export default tseslint.config(
     plugins: { react, 'react-refresh': reactRefresh },
     settings: { react: { version: '19.0' } },
     rules: {
-      // Nothing here renders HTML from a string, and nothing should start:
-      // recipient names and memos are operator input, and innerHTML is how
-      // that becomes script.
+      // Names and memos are operator input.
       'react/no-danger': 'error',
 
-      // "One component per file, default export, named to match the file."
-      //
-      // This is the rule that actually checks it, and it is the reason the
-      // linter exists: `react-refresh/only-export-components` looks only at
-      // what a file EXPORTS, so it was perfectly happy with a MessageList.tsx
-      // that defined three components and exported one. `no-multi-comp` counts
-      // definitions, which is the thing the doc was really asking for.
+      // One component per file. `only-export-components` checks exports;
+      // this counts definitions.
       'react/no-multi-comp': ['error', { ignoreStateless: false }],
 
-      // A component file exports its component and nothing else. A helper that
-      // a second file wants belongs in a .ts module, where importing it does
-      // not drag a component along behind it.
+      // A helper another file needs belongs in a `.ts` module.
       'react-refresh/only-export-components': ['error', { allowConstantExport: false }],
     },
   },
@@ -233,7 +175,6 @@ export default tseslint.config(
   },
   { files: ['**/*.js'], extends: [tseslint.configs.disableTypeChecked] },
 
-  // Last: turns off everything Prettier owns, so formatting is never two tools'
-  // opinion at once.
+  // Last, so Prettier alone owns formatting.
   prettier,
 );

@@ -1,14 +1,9 @@
 /**
- * The live connection: one stream of change notices, reconnecting for as long
- * as the page is open. No React.
+ * The live connection: one stream of change notices, reconnecting while the page is open. No React.
  *
- * Read with `fetch` rather than `EventSource` so the request carries the auth
- * header like every other one — see `sse.ts` for why that decides it.
- *
- * The connection state is a tiny external store rather than React state,
- * because the one stream is shared by the whole page: the hook that opens it,
- * the indicator in the header, and every query deciding how often to poll all
- * read the same answer. `useSyncExternalStore` is the React side of it.
+ * Read with `fetch`, not `EventSource`, so it carries the auth header. The
+ * connection state is a small external store, because the whole page shares
+ * one stream; `useLiveStatus` is its React side.
  */
 
 import { authHeaders } from 'src/api/auth';
@@ -16,10 +11,8 @@ import { type ChangeEvent, isChangeEvent } from 'src/events';
 import { parseSse } from 'src/sse';
 
 /**
- * `connecting` before the first answer, `live` once the server has said
- * `ready`, and `offline` from the first failure until a reconnect succeeds.
- * Not `live` on the socket opening — see `ready` in `backend/app/api/routes/
- * events.py` for why only the server can say when listening has started.
+ * `connecting` before the first answer, `live` once the server says `ready`,
+ * `offline` from a failure until a reconnect succeeds.
  */
 export type LiveStatus = 'connecting' | 'live' | 'offline';
 
@@ -29,21 +22,16 @@ export interface StreamHandlers {
   onReady: () => void;
 }
 
-// Doubling, capped. A backend restarting takes a second or two; one that is
-// down for longer should not be asked forty times a minute by every tab.
+// Reconnect backoff: doubling, capped.
 const RETRY_MIN_MS = 1000;
 const RETRY_MAX_MS = 30_000;
 
 /**
  * Silence this long means the connection is dead, whatever the socket says.
  *
- * A stream can die without closing. The one that found this was Vite's dev
- * proxy, which keeps the browser's side open after the backend behind it has
- * gone — so the console said Live while hearing nothing, and would have
- * forever. A laptop waking from sleep and a NAT dropping an idle mapping look
- * the same. The server sends a heartbeat every `HEARTBEAT_SECONDS` (10, in
- * `backend/app/api/routes/events.py`), so two and a half of those missed is
- * not a quiet moment, it is a corpse.
+ * A proxy can hold a stream open after its upstream dies. The server heartbeats
+ * every 10s (`HEARTBEAT_SECONDS` in backend/app/api/routes/events.py); change
+ * the two together.
  */
 const STALL_MS = 25_000;
 
@@ -78,8 +66,7 @@ export function openEventStream(handlers: StreamHandlers): () => void {
 
 async function run(handlers: StreamHandlers, signal: AbortSignal): Promise<void> {
   let delay = RETRY_MIN_MS;
-  // One exit, checked after each attempt. Closing aborts the fetch in flight or
-  // the sleep in progress; either way the attempt ends and this sees it.
+  // Closing aborts the fetch or the sleep in progress; either way this sees it.
   for (;;) {
     try {
       await read(handlers, signal, () => {
@@ -87,8 +74,7 @@ async function run(handlers: StreamHandlers, signal: AbortSignal): Promise<void>
         setStatus('live');
       });
     } catch {
-      // A refused connection, a proxy timeout, a server restart. All of them
-      // mean the same thing here: wait, then try again.
+      // Any failure means the same thing: wait, then reconnect.
     }
     if (signal.aborted) return;
     setStatus('offline');
@@ -98,12 +84,9 @@ async function run(handlers: StreamHandlers, signal: AbortSignal): Promise<void>
 }
 
 /**
- * One connection, read until it ends or goes silent. Throws on anything but a
- * clean close.
+ * One connection, read until it ends or goes silent. Throws on anything but a clean close.
  *
- * Aborted by its own controller rather than the caller's: closing the page
- * aborts both, but a stall aborts only this attempt, and the loop in `run`
- * then reconnects.
+ * Its own controller, so a stall aborts only this attempt and `run` reconnects.
  */
 async function read(
   handlers: StreamHandlers,
@@ -153,8 +136,7 @@ function dispatch(buffer: string, handlers: StreamHandlers, onLive: () => void):
       handlers.onReady();
     } else if (event.event === 'change') {
       const data: unknown = JSON.parse(event.data);
-      // A notice this console does not understand is skipped, not fatal: the
-      // next `ready` re-reads everything anyway.
+      // Skip a notice this console does not understand; the next `ready` re-reads everything.
       if (isChangeEvent(data)) handlers.onChange(data);
     }
   }

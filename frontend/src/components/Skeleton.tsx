@@ -4,12 +4,8 @@ interface Props {
 }
 
 /**
- * A placeholder the shape of the content that will replace it.
- *
- * Shaped rather than a spinner, so the page does not jump when the data lands:
- * a row of skeletons becomes a row of transfers in the same place. Pulses only
- * for people who have not asked for reduced motion, and is hidden from screen
- * readers — `Loading` says what is loading, in words, once.
+ * A placeholder shaped like its content, so the page does not jump when data
+ * arrives. Hidden from screen readers; `Loading` announces the region.
  */
 export default function Skeleton({ className = '' }: Props) {
   return (

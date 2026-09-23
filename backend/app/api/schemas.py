@@ -1,14 +1,7 @@
-"""The HTTP response envelope, the request bodies, and the HTTP-only resources.
+"""The HTTP envelope, request bodies and response shapes.
 
-**Every response is `{"data": ..., "meta": ...}`.** A bare array or scalar at
-the top level leaves nowhere to add pagination, warnings, or a deprecation
-notice without breaking clients.
-
-What does *not* belong here is anything the worker also publishes: those shapes
-live in `app/wire.py`, because a process that serves no requests should not
-have to import the HTTP layer to say what a frame looks like. The shapes below
-are the ones that genuinely only travel over HTTP, and they inherit camelCase
-from `wire.ApiSchema` along with everything else on the wire.
+Every response is `{"data": ..., "meta": ...}`, leaving room for pagination
+and warnings. Shapes the worker also publishes live in `app/wire.py`.
 """
 
 from datetime import datetime
@@ -45,8 +38,7 @@ class TaskOut(ApiSchema):
     run_at: datetime
     claimed_by: str | None
     error: str | None
-    # The transfer this task is about, when it is about one. Read off the
-    # payload so an operator can get from a stuck task to its payment.
+    # The transfer this task is about, if any, read off the payload.
     transfer_id: UUID | None
     created_at: datetime
     updated_at: datetime
@@ -157,13 +149,7 @@ class LineOut(ApiSchema):
 
 
 class JournalOut(ApiSchema):
-    """One balanced posting, lines and all, for a person to read.
-
-    The lines are sent as they were written rather than summarised into a
-    single signed amount, because the whole point of showing a journal is that
-    the reader can see it balance: a debit here, a credit there, the same
-    number on both.
-    """
+    """One journal with its lines, sent as written so the reader can see it balance."""
 
     id: UUID
     kind: str
@@ -183,12 +169,9 @@ class JournalOut(ApiSchema):
 
 
 class TransferDetailOut(TransferOut):
-    """A transfer with its two histories: what the books say, and what the worker did.
+    """A transfer with its journals and its tasks, in one response.
 
-    Both in one response rather than two endpoints, for the same reason the
-    overview is one request: they are read side by side, and a journal from one
-    moment beside a task list from another would show a settlement whose task
-    had apparently not run yet.
+    One response rather than two, so both histories are from the same moment.
     """
 
     journals: list[JournalOut]
@@ -234,9 +217,7 @@ class FindingOut(ApiSchema):
 
 class OverviewOut(ApiSchema):
     accounts: list["AccountOut"]
-    # Always zero. Surfaced rather than asserted only in tests, because a
-    # non-zero value means a database trigger has gone missing and nothing else
-    # would say so.
+    # Always zero; non-zero means a ledger trigger is missing.
     trial_balance_minor: int
     unresolved_findings: int
     dead_lettered: int
@@ -258,8 +239,7 @@ class RunItemIn(ApiSchema):
 
 
 class RunIn(ApiSchema):
-    # Bounded because a run is one transaction: its size is how long the
-    # funding lock is held. See `max_run_size` in config.py.
+    # Bounded by `max_run_size`: a run is one transaction.
     items: list[RunItemIn] = Field(min_length=1, max_length=settings.max_run_size)
     currency: str = Field(min_length=3, max_length=3)
     memo: str | None = Field(default=None, max_length=200)
@@ -273,9 +253,7 @@ class RunIn(ApiSchema):
 
 class TransferIn(ApiSchema):
     recipient_id: UUID
-    # `gt=0` here as well as a CHECK in the database. This one produces a 422
-    # the client can show; the CHECK is what makes it true regardless of who is
-    # writing. Neither makes the other redundant.
+    # Also a CHECK in the database; this one gives the client a readable 422.
     amount_minor: int = Field(gt=0)
     currency: str = Field(min_length=3, max_length=3)
 

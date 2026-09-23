@@ -1,13 +1,7 @@
-"""Structured logging.
+"""Structured logging with structlog. See AGENTS.md > Logging.
 
-Conventions (these are the rules, not suggestions — see AGENTS.md § Logging):
-
-* The first argument is a **static string**. No f-strings, no interpolation.
-  That string is the event name you grep and aggregate on; interpolating makes
-  every occurrence unique and destroys that.
-* Everything else is a keyword argument, and every value is a primitive.
-* Never pass an ORM model as a kwarg, even one with a nice __repr__ — it
-  serializes unpredictably and can drag a lazy-load into your log call.
+The first argument is a static event name; everything else is a keyword
+argument with a primitive value.
 
     logger.info("transfer initiated", transfer_id=str(t.id), amount_minor=t.amount_minor)
 """

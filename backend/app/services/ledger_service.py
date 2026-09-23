@@ -1,22 +1,9 @@
 """Posting to the books, and reading balances back out.
 
-**Every write to `ledger_entries` goes through `post`.** Not because the
-database would let a bad journal through otherwise — it would not, that is what
-the triggers are for — but because a caller assembling lines by hand has to get
-the directions right, and getting them wrong is the one mistake that still
-balances. `post` takes the two halves together and refuses anything else.
-
-The Python checks here duplicate the database triggers on purpose. They are not
-the enforcement; they are the error message. A caller that passes an unbalanced
-journal gets an `UnbalancedError` naming the discrepancy at the call site, rather than
-an opaque `check_violation` raised at COMMIT from somewhere else entirely. If
-the two ever disagree, the database is right.
-
-**Nothing here commits.** Posting to the books is almost never the only thing a
-request does — it happens alongside creating a transfer, recording an
-idempotency key, and enqueueing the work that will actually move the money —
-and all of those have to land or not land together. Committing here would end
-the caller's transaction early and make that impossible. Callers commit.
+Every write to `ledger_entries` goes through `post`, whose checks duplicate the
+database triggers to give a readable error at the call site; the triggers are
+the enforcement. Nothing here commits: posting lands in the caller's
+transaction. See AGENTS.md > The books.
 """
 
 import uuid
@@ -42,21 +29,13 @@ JournalKind = Literal[
     "transfer_reversed",
 ]
 
-# Which direction increases each kind of account.
-#
-# This is the one piece of accounting that cannot be derived and must simply be
-# known: assets go up on a debit, liabilities and equity go up on a credit. It
-# is written down here so that `balance` can return a number that reads the way
-# a person expects — a funding account with money left in it is positive — and
-# so that nothing else in the codebase has to remember which way round it goes.
+# Which direction increases each kind of account: assets rise on a debit,
+# liabilities and equity on a credit. Written down once, so `balance` reads the
+# way a person expects and nothing else has to remember.
 NATURAL_DIRECTION: dict[str, Direction] = {
-    # Equity: the pool of donated money. Credited when funded, debited when
-    # given away.
-    "program_funding": "credit",
-    # Liability: what we owe a recipient until the provider confirms payment.
-    "recipient_payable": "credit",
-    # Asset: our cash balance held at the provider.
-    "provider_settlement": "debit",
+    "program_funding": "credit",  # equity
+    "recipient_payable": "credit",  # liability
+    "provider_settlement": "debit",  # asset
 }
 
 
@@ -68,19 +47,13 @@ class UnbalancedError(LedgerError):
     """Debits and credits do not agree, so this is not a posting."""
 
 
-# A posting moves money between accounts, so two lines is the floor. Named
-# rather than inline so the refusal below reads as a rule and not a magic 2.
+# A posting moves money between accounts.
 MINIMUM_LINES = 2
 
 
 @dataclass(frozen=True)
 class Posting:
-    """One line, before it is a row.
-
-    `amount_minor` is always positive; `direction` carries the sign. A signed
-    amount plus a direction gives two ways to say "credit 500", one of which is
-    a double negative waiting to be misread.
-    """
+    """One line, before it is a row. `amount_minor` is positive; `direction` is the sign."""
 
     account_id: uuid.UUID
     direction: Direction
@@ -98,10 +71,8 @@ async def post(
 ) -> JournalEntry:
     """Write one balanced journal entry. Does not commit.
 
-    `currency` is a parameter of the journal rather than of each line, which
-    makes the mixed-currency journal the trigger refuses unrepresentable here
-    in the first place. Cross-currency movement is two journals and an explicit
-    FX leg.
+    `currency` belongs to the journal, not each line, so a mixed-currency journal
+    cannot be expressed here at all.
     """
     if len(postings) < MINIMUM_LINES:
         raise UnbalancedError(
@@ -126,8 +97,6 @@ async def post(
 
     journal = JournalEntry(kind=kind, transfer_id=transfer_id, memo=memo)
     session.add(journal)
-    # Flushed rather than committed, so the lines below have a journal id to
-    # point at while staying inside the caller's transaction.
     await session.flush()
 
     for line in postings:
@@ -154,12 +123,7 @@ async def post(
 
 
 def _signed_amount(natural: Direction) -> ColumnElement[int]:
-    """SUM expression for a balance in an account's natural direction.
-
-    Built as a CASE inside one aggregate rather than two separate sums
-    subtracted, so the balance is one index scan over the account's lines
-    instead of two.
-    """
+    """SUM for a balance in an account's natural direction, in one pass over its lines."""
     positive = "debit" if natural == "debit" else "credit"
     return func.coalesce(
         func.sum(
@@ -173,12 +137,7 @@ def _signed_amount(natural: Direction) -> ColumnElement[int]:
 
 
 async def balance(session: AsyncSession, *, account_id: uuid.UUID) -> int:
-    """What this account holds, in minor units, in its natural direction.
-
-    Derived from the entries every time rather than read from a column. See the
-    note on `Account` for why there is no stored balance and what to do when
-    this stops being fast enough.
-    """
+    """What this account holds, in minor units, in its natural direction. Derived every time."""
     account = await session.get(Account, account_id)
     if account is None:
         raise LedgerError(f"no account {account_id}")
@@ -193,12 +152,7 @@ async def balance(session: AsyncSession, *, account_id: uuid.UUID) -> int:
 async def trial_balance(session: AsyncSession) -> int:
     """Debits minus credits across the whole ledger. Always zero.
 
-    The one number that says whether the books are sound. If this is ever
-    non-zero, something has written to `ledger_entries` without going through a
-    balanced journal — which the triggers should make impossible, so a non-zero
-    answer here means a trigger is missing rather than that a posting was
-    wrong. That is exactly the failure Alembic cannot warn about, which is why
-    this is cheap to expose and worth watching.
+    Non-zero means a trigger has gone missing, which Alembic cannot detect.
     """
     result = await session.execute(
         select(
@@ -217,12 +171,7 @@ async def trial_balance(session: AsyncSession) -> int:
 
 
 async def system_account(session: AsyncSession, *, kind: str, currency: str) -> Account:
-    """The one funding or settlement account for a currency.
-
-    "The one" is guaranteed by a partial unique index rather than by
-    convention, so this cannot quietly start picking a different account
-    depending on the query plan.
-    """
+    """The one funding or settlement account for a currency, per a partial unique index."""
     if kind == "recipient_payable":
         raise LedgerError("recipient_payable accounts belong to a recipient; use payable_account")
 
@@ -240,20 +189,10 @@ async def system_account(session: AsyncSession, *, kind: str, currency: str) -> 
 async def payable_account(
     session: AsyncSession, *, recipient_id: uuid.UUID, currency: str
 ) -> Account:
-    """This recipient's payable account, creating it on first use.
+    """This recipient's payable account, created on first use.
 
-    Created lazily rather than at enrolment because an account with no entries
-    is indistinguishable from one that does not exist — the balance of both is
-    zero — so there is nothing to gain by making it earlier.
-
-    **The insert is `ON CONFLICT DO NOTHING`, not a read followed by a write.**
-    Two requests for the same recipient can reach this at the same moment, and
-    the read-then-write version has both see nothing and both insert, so one
-    gets a unique violation and its whole transfer fails. That is not
-    hypothetical: it is what this function did until a concurrency test found
-    it, and it looked safe only because the funding lock in
-    `transfer_service.initiate` happened to serialise every caller. Relying on
-    a lock taken somewhere else for a different reason is not a guarantee.
+    `ON CONFLICT DO NOTHING` rather than read-then-write, so two concurrent
+    transfers to one recipient cannot both insert.
     """
     values = {
         "name": f"Payable {recipient_id}",
@@ -264,19 +203,15 @@ async def payable_account(
     await session.execute(
         pg_insert(Account)
         .values(**values)
-        # `index_where` is required, not decorative: the unique index is
-        # partial (`where recipient_id is not null`, so that system accounts
-        # with a null recipient do not all collide), and Postgres will not
-        # match a partial index unless the predicate is restated here.
+        # The unique index is partial; Postgres only matches it if the
+        # predicate is restated.
         .on_conflict_do_nothing(
             index_elements=["recipient_id", "currency"],
             index_where=Account.recipient_id.isnot(None),
         )
     )
 
-    # Selected afterwards rather than RETURNINGed, because DO NOTHING returns
-    # no row when the conflict happened — which is exactly the case that needs
-    # an answer.
+    # Not RETURNING: DO NOTHING returns no row on conflict.
     result = await session.execute(
         select(Account).where(
             Account.recipient_id == recipient_id,
@@ -287,25 +222,10 @@ async def payable_account(
 
 
 async def lock_account(session: AsyncSession, *, account_id: uuid.UUID) -> None:
-    """Serialise this transaction against others touching the same account.
+    """Take the account's row lock as a mutex, before reading its balance.
 
-    **The lock is not protecting the account row's data — nothing here updates
-    it.** It is being used as a mutex, and the row is simply the agreed place
-    to take it.
-
-    The problem it solves is write skew. Two concurrent transfers both read the
-    funding balance, both see enough, and both post — and the fund ends up
-    overdrawn even though neither transaction did anything wrong on its own.
-    No constraint catches this, because each journal balances perfectly; the
-    books are consistent and the programme has still promised money it does not
-    have.
-
-    Reading the balance under `FOR UPDATE` on the account fixes it because both
-    transactions must take the same row lock *before* reading. The second
-    blocks until the first commits and then reads a balance that includes the
-    first transfer. A `SELECT` on `ledger_entries` alone cannot do this: the
-    rows the other transaction is about to write do not exist yet, so there is
-    nothing there to lock.
+    Prevents write skew between concurrent transfers. See AGENTS.md >
+    Concurrency: the failure no constraint catches.
     """
     await session.execute(select(Account.id).where(Account.id == account_id).with_for_update())
 
@@ -313,14 +233,7 @@ async def lock_account(session: AsyncSession, *, account_id: uuid.UUID) -> None:
 async def journals_for_transfer(
     session: AsyncSession, *, transfer_id: uuid.UUID
 ) -> list[JournalEntry]:
-    """Every posting made on behalf of one transfer, oldest first, lines loaded.
-
-    This is the transfer's life as the books tell it: authorised, then settled
-    or reversed. The lines come with their accounts because the reader wants to
-    know *which* fund was debited, not a uuid — and because touching a lazy
-    relationship from async code raises `MissingGreenlet`, which reads like a
-    driver bug and is not one.
-    """
+    """Every journal for one transfer, oldest first, with lines and accounts loaded eagerly."""
     result = await session.execute(
         select(JournalEntry)
         .options(selectinload(JournalEntry.lines).selectinload(LedgerEntry.account))
@@ -331,13 +244,7 @@ async def journals_for_transfer(
 
 
 async def system_accounts(session: AsyncSession) -> list[Account]:
-    """Every account that is not a recipient's payable, in a stable order.
-
-    The programme-level view: the fund and the float. Recipient payables are
-    excluded because there is one per recipient and they are individually
-    uninteresting — what matters about them is the total, which is the
-    difference between the two accounts here.
-    """
+    """The fund and the float: every account that is not a recipient's payable."""
     result = await session.execute(
         select(Account).where(Account.recipient_id.is_(None)).order_by(Account.kind)
     )

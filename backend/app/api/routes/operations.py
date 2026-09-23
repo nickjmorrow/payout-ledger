@@ -1,10 +1,4 @@
-"""What an operator needs to see: balances, people, drift, and stuck work.
-
-These are read-only views onto state the rest of the system already keeps.
-Nothing here computes anything the books do not already say — the balances come
-from the entries, the findings from the reconciliation pass, the dead letters
-from the queue.
-"""
+"""Read-only views for operators: balances, recipients, findings, and the queue."""
 
 import uuid
 
@@ -33,26 +27,17 @@ router = APIRouter(tags=["operations"])
 
 @router.get("/overview")
 async def overview(session: DbSession, _user: CurrentUser) -> ApiResponse[OverviewOut]:
-    """One request for the console's header.
-
-    Deliberately one endpoint rather than three, because these three numbers
-    are read together and a page that fetched them separately could render a
-    fund balance from one moment beside a float balance from another — which
-    for a ledger reads as the books not adding up.
-    """
+    """The console's summary figures, in one request so they are from one moment."""
     accounts = await _system_accounts(session)
     queue = await task_service.counts(session)
 
     return ApiResponse(
         data=OverviewOut(
             accounts=accounts,
-            # The number that says whether the books are sound. Surfaced rather
-            # than buried in a test, because a non-zero value means a trigger
-            # has gone missing and the only way anyone finds out is by looking.
+            # Always zero while the ledger triggers are in place.
             trial_balance_minor=await ledger_service.trial_balance(session),
             unresolved_findings=await reconciliation_service.currently_reported(session),
-            # A count, not the length of the dead-letter listing, which is
-            # capped: past fifty it would quietly stop going up.
+            # A count, not the length of the capped listing.
             dead_lettered=queue.dead,
         )
     )
@@ -79,12 +64,7 @@ async def list_findings(session: DbSession, _user: CurrentUser) -> ApiResponse[l
 
 @router.get("/dead-letters")
 async def list_dead_letters(session: DbSession, _user: CurrentUser) -> ApiResponse[list[TaskOut]]:
-    """Work that exhausted its retries and is parked for a human.
-
-    The transfers behind these have already been reversed — see
-    `worker/disburse` — so what is here is the evidence of why, not money that
-    is still stuck.
-    """
+    """Work that exhausted its retries. See AGENTS.md > Retries, and the dead-letter queue."""
     tasks = await task_service.dead_lettered(session)
     return ApiResponse(data=[TaskOut.from_task(t) for t in tasks])
 
@@ -95,9 +75,7 @@ async def retry_dead_letter(
 ) -> ApiResponse[TaskOut]:
     """Put a dead-lettered task back on the queue, if it is still worth running.
 
-    No idempotency key, and none needed: the service refuses a task that is no
-    longer dead, so a repeated request is refused rather than doubled. See
-    `dead_letter_service` for which tasks are refused and why.
+    No idempotency key needed: a repeat is refused, not doubled.
     """
     try:
         task = await dead_letter_service.retry(session, task_id=task_id)

@@ -1,20 +1,9 @@
-"""What a mobile-money provider is, as far as this application is concerned.
+"""The seam: what a payment provider is, as far as this application is concerned.
 
-**The seam.** Everything above this file talks to `PaymentProvider` and never
-to a concrete provider, which is what lets the mock be swapped for a real
-integration without touching the worker, the services or the routes. A test
-passes a fake in rather than patching one out.
-
-The Protocol is deliberately small. Three operations are all a disbursement
-system needs from a provider, and every one of them is on this list because
-something in the design depends on it:
-
-  - `send_payment` takes an idempotency key, because retries are mandatory and
-    a retry without one is a second payment;
-  - `get_payment` exists because a send whose response we never saw is not a
-    send that did not happen, and asking is the only way to find out;
-  - `list_payments` exists for reconciliation, which needs their whole view of
-    a window rather than one payment at a time.
+Everything above this talks to `PaymentProvider`, never to a concrete provider.
+Three operations: `send_payment` (idempotent on the key we supply),
+`get_payment` (to find out what happened), and `list_payments` (for
+reconciliation). See AGENTS.md > The provider seam.
 """
 
 from dataclasses import dataclass
@@ -28,11 +17,7 @@ PaymentStatus = Literal["pending", "succeeded", "failed"]
 class ProviderPaymentView:
     """Their record of one payment, as we are allowed to see it.
 
-    Frozen, and a separate type from the `ProviderPayment` row on purpose. The
-    row is the mock's private storage; this is the contract. A real provider
-    returns JSON, not a SQLAlchemy model, and code that reads a model here
-    would stop compiling the day the mock is replaced — which is the seam
-    leaking.
+    The contract, deliberately separate from the mock's `ProviderPayment` row.
     """
 
     reference: str
@@ -49,12 +34,8 @@ class ProviderPaymentView:
 class ProviderError(Exception):
     """The provider could not be reached, or refused the request.
 
-    `retryable` is the distinction the worker acts on, and it is the provider
-    adapter's job to make it — only the adapter knows whether a given failure
-    is a timeout worth another attempt or a rejection that will never succeed.
-    Getting this wrong in the safe-looking direction (everything retryable) is
-    how a permanently invalid payment consumes its whole retry budget; getting
-    it wrong the other way drops a payment because of a blip.
+    `retryable` is the adapter's judgment: only it knows whether a failure is a
+    blip worth retrying or a refusal that never will succeed.
     """
 
     def __init__(self, message: str, *, retryable: bool) -> None:
@@ -71,12 +52,7 @@ class PaymentProvider(Protocol):
         amount_minor: int,
         currency: str,
     ) -> ProviderPaymentView:
-        """Instruct a payment. Safe to call twice with the same key.
-
-        The provider dedupes on `idempotency_key` and returns the original
-        payment for a repeat, which is what makes a retry after an uncertain
-        response safe rather than a second disbursement.
-        """
+        """Instruct a payment. A repeated key returns the original payment."""
         ...
 
     async def get_payment(self, *, reference: str) -> ProviderPaymentView | None:

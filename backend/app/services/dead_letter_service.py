@@ -1,26 +1,9 @@
 """Deciding whether a dead-lettered task may run again.
 
-The mechanics of retrying are the queue's (`task_service.requeue`). This is the
-judgement, and it lives here because it needs to know what a task is *about* —
-which the queue deliberately does not.
-
-**A task about a finished transfer is not retried.** A disbursement that
-exhausted its retries has, on the normal path, already reversed its transfer
-and returned the money to the fund (`worker/disburse._handle_provider_error`).
-Running its task again would find the transfer no longer pending and do
-nothing — or, worse, look to an operator as though the payment had been sent
-again. The honest instruction is to authorise a new disbursement, and the
-refusal says so.
-
-**A task about an unfinished transfer is retried, and that is the case this
-exists for.** A worker that dies mid-send on the last attempt is dead-lettered
-by the sweeper, which knows nothing about transfers — so the transfer stays
-`pending` with the fund debited and nothing will ever move it. Retrying is
-safe because both halves check before acting: the handler skips a transfer
-that is no longer pending, and the provider dedupes on the transfer id.
-
-Tasks about no transfer at all — a reconciliation pass — are always
-retryable. Running one twice is harmless by design (`worker/reconcile.py`).
+Refused for a task about a transfer that already settled or was reversed:
+rerunning it would do nothing. Allowed for an unfinished transfer, which is
+safe because the handler and the provider both check before acting. See
+AGENTS.md > Retries, and the dead-letter queue.
 """
 
 import uuid
@@ -49,12 +32,10 @@ class AlreadyFinishedError(DeadLetterError):
 
 
 async def retry(session: AsyncSession, *, task_id: uuid.UUID) -> Task:
-    """Requeue one dead-lettered task, if it is still worth running. **Does not commit.**
+    """Requeue one dead-lettered task, if it is still worth running. Does not commit.
 
-    The row is locked first, so two operators pressing Retry at once are
-    serialised: the second sees a task that is no longer dead and is refused,
-    rather than both requeueing it. That check is what makes repeating the
-    request safe without an idempotency key — a repeat is refused, not doubled.
+    The row lock makes a repeated request refused rather than doubled, so no
+    idempotency key is needed.
     """
     task = await session.get(Task, task_id, with_for_update=True)
     if task is None or task.status != "failed":

@@ -1,16 +1,7 @@
 /**
- * What the wire's identifiers mean to a person. Pure, no React.
+ * Schema identifiers as words: `program_funding` -> "Program fund". Pure, no React.
  *
- * The API speaks in the schema's own words — `program_funding`,
- * `transfer_reversed`, `settle_transfer` — because those are the names the
- * database checks and the logs are grepped for. They are the wrong words for
- * a screen. An operator reading a journal wants "Program fund" beside a
- * debit, not a column name, and the difference between the two vocabularies is
- * exactly one lookup, kept here so no component carries its own copy.
- *
- * Each map falls back to the raw value rather than to nothing: an identifier
- * this file has not heard of is still better shown than hidden, and showing
- * it is how the gap gets noticed.
+ * Unknown identifiers fall through unchanged, so a gap is visible rather than hidden.
  */
 
 const ACCOUNT_KINDS: Record<string, string> = {

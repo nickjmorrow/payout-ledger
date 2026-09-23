@@ -15,13 +15,8 @@ interface Props {
 }
 
 /**
- * Authorise one payment to each of several recipients, as one decision.
- *
- * The same amount to everyone, because that is what an unconditional cash
- * transfer programme does: a fixed sum per household per cycle. The total is
- * shown before submitting, in the operator's terms, since it is the number the
- * server will check against the fund — and refuse the whole run over, not the
- * recipient who tipped it.
+ * Authorizes the same amount to each of several recipients, as one run. The total
+ * is shown before submitting, since it is what the server checks against the fund.
  */
 export default function RunForm({ onCreated }: Props) {
   const amountField = useId();

@@ -1,31 +1,9 @@
 """Making a repeated request one request.
 
-Retries are not optional. Networks drop responses, people double-click, and a
-client that gave up waiting has no way to know whether its disbursement
-happened. Without this, every one of those is a second payment.
-
-The mechanism is the primary key. A client supplies a key; the first request to
-arrive with it inserts the row and does the work; every later request with the
-same key finds the row and is served the stored response instead of doing the
-work again. There is no lock, no extra round trip and no window — **the
-uniqueness constraint is the lock**, and exactly one INSERT can win.
-
-Three things a caller can be told, and they are genuinely different:
-
-  - `Proceed` — this key is new, do the work.
-  - `Replay` — this key already completed, here is what it returned.
-  - `InFlightError` — this key is being worked on right now by somebody else.
-  - `KeyConflictError` — this key was used for a *different* request.
-
-The last one matters more than it looks. Returning the first response for a
-different body would silently discard the second request, which is the exact
-failure an idempotency key exists to prevent — the client would believe it had
-sent something it had not. It is refused instead.
-
-**Nothing here commits.** The key row and the work it guards are one
-transaction: a key recorded without its transfer would permanently block the
-retry that would have created it, and a transfer without its key would be
-payable twice.
+The key is the primary key, so the uniqueness constraint is the lock. Four
+answers: Proceed, Replay, InFlightError and KeyConflictError. Nothing here
+commits: the key and the work it guards are one transaction. See AGENTS.md >
+Idempotency.
 """
 
 import hashlib
@@ -49,12 +27,7 @@ class IdempotencyError(Exception):
 
 
 class InFlightError(IdempotencyError):
-    """The first request with this key has not finished yet.
-
-    The honest answer is "ask again shortly", not a guess at what the other
-    request will return. A client that retries gets the stored response once
-    the first one lands.
-    """
+    """The first request with this key has not finished; ask again shortly."""
 
 
 class KeyConflictError(IdempotencyError):
@@ -76,13 +49,7 @@ class Replay:
 
 
 def fingerprint(body: dict[str, Any]) -> str:
-    """A stable hash of a request body.
-
-    `sort_keys` because JSON object order is not meaningful and two clients
-    serialising the same request must agree. `separators` because whitespace is
-    not meaningful either, and a pretty-printed body is the same request as a
-    compact one.
-    """
+    """A hash of a request body that ignores key order and whitespace."""
     canonical = json.dumps(body, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()
 
@@ -96,17 +63,9 @@ async def claim(
 ) -> Proceed | Replay:
     """Take this key, or report what the request that already has it did.
 
-    `ON CONFLICT DO NOTHING` rather than a SELECT followed by an INSERT. The
-    read-then-write version has a window between the two in which a second
-    request sees nothing and also inserts, and the whole point of this module
-    is that that window does not exist.
-
-    **A concurrent request blocks here rather than racing**, and that is
-    correct. Postgres makes the second INSERT wait on the first transaction's
-    uncommitted row: if that transaction commits, the waiter then sees the
-    completed key and replays it; if it rolls back, the waiter takes the key
-    and does the work itself. Either way the outcome is one payment, and the
-    waiting is bounded by the first request's transaction.
+    `ON CONFLICT DO NOTHING`, so there is no window between checking and inserting.
+    A concurrent request waits on the first one's uncommitted row, then replays it
+    or takes the key.
     """
     digest = fingerprint(body)
 
@@ -124,9 +83,7 @@ async def claim(
         await session.execute(select(IdempotencyKey).where(IdempotencyKey.key == key))
     ).scalar_one()
 
-    # Scoped per endpoint so a key cannot replay the response of an unrelated
-    # operation — a `POST /transfers` key reused against a refund must not come
-    # back with the transfer's 201.
+    # Scoped per endpoint, so a key cannot replay an unrelated operation's response.
     if existing.endpoint != endpoint:
         raise KeyConflictError(
             f"This idempotency key was used for {existing.endpoint}, not {endpoint}."
@@ -157,11 +114,7 @@ async def record_response(
     body: dict[str, Any],
     transfer_id: uuid.UUID | None = None,
 ) -> None:
-    """Store what this request returned, so a retry can be served it.
-
-    Called inside the same transaction as the work, so the response and the
-    thing it describes become visible together.
-    """
+    """Store what this request returned, in the same transaction as the work."""
     row = await session.get(IdempotencyKey, key)
     if row is None:
         raise IdempotencyError(f"no idempotency key {key!r} to record a response against")

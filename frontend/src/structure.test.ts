@@ -3,17 +3,9 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Structural tests: the frontend conventions, checked by a machine.
- *
- * `eslint.config.js` already enforces the mechanical half of the contract, and
- * anything it can express belongs there rather than here — a rule in two places
- * is a rule that will disagree with itself. What is left is the handful of
- * rules that are about the *shape of the tree*: which directory may import
- * what, and whether a file is named after what it exports.
- *
- * The backend's counterpart, with a longer note on what a structural test is
- * for and what does not belong in one, is
- * `backend/tests/structure/test_conventions.py`.
+ * The frontend conventions eslint cannot express: which directory may import
+ * what, and whether a file is named after what it exports. See AGENTS.md > Checks
+ * and `backend/tests/structure/test_conventions.py`.
  */
 
 const SRC = new URL('.', import.meta.url).pathname;
@@ -34,17 +26,11 @@ const FILES = walk(SRC).filter((file) => !file.endsWith('.test.ts'));
 const read = (file: string) => readFileSync(file, 'utf8');
 const relative = (file: string) => file.slice(SRC.length);
 
-// --------------------------------------------------------- semantic colours
+// --------------------------------------------------------- semantic colors
 //
-// AGENTS.md > Frontend: "Every colour is a semantic token, never a literal.
-// `bg-surface`, not `bg-slate-50`; `text-danger`, not `text-red-700`." That is
-// what makes a theme a block of variable values rather than a `dark:` class on
-// every element. The trap is opacity: `border-black/10` is a hairline on one
-// background and invisible on the other, which is why a fraction is written
-// against `ink`.
-//
-// Prettier sorts class strings and eslint has no idea what is inside one, so
-// nothing else in the toolchain can see this.
+// Colors are semantic tokens, so a theme is a block of variables. Fractions are
+// written against `ink`, because `black/10` vanishes on a dark background.
+// Nothing else in the toolchain reads inside class strings.
 
 const TAILWIND_PALETTE = [
   'slate',
@@ -113,8 +99,7 @@ describe('colours are semantic tokens', () => {
   });
 
   it('declares every token it needs in one place', () => {
-    // A sanity check on the rule above: if the @theme block ever empties out,
-    // the deny-list would pass while nothing worked.
+    // If the @theme block ever empties, the rule above would pass vacuously.
     const css = readFileSync(path.join(SRC, 'index.css'), 'utf8');
     const tokens = [...css.matchAll(/--color-([\w-]+):/g)].map((match) => match[1]);
     expect(new Set(tokens)).toContain('ink');
@@ -124,13 +109,8 @@ describe('colours are semantic tokens', () => {
 
 // ------------------------------------------------------- the view model is pure
 //
-// AGENTS.md > Layout > The three `.ts` files at the top level are the view
-// model: they are "pure functions with no React in them, which is why they are
-// not in `components/`." The same holds for `src/api/`, the HTTP boundary.
-//
-// This is the rule that decays first. A hook is one import away, and the moment
-// one lands the fold stops being testable without a renderer — which is exactly
-// how the suite above would stop existing.
+// The top-level `.ts` modules and `src/api/` import no React, so they stay
+// testable without a renderer.
 
 describe('the view model and the API boundary contain no React', () => {
   const pure = FILES.filter(
@@ -145,11 +125,8 @@ describe('the view model and the API boundary contain no React', () => {
 
 // ---------------------------------------------------- one thing, named for it
 //
-// AGENTS.md > Frontend: "One component per file, default export, named to match
-// the file." `react/no-multi-comp` counts definitions and
-// `unicorn/filename-case` checks the case, but neither checks that the name in
-// the file is the name on the file — which is the half that makes a component
-// greppable.
+// `no-multi-comp` counts definitions and `filename-case` checks case; this
+// checks that the export's name is the file's name.
 
 const DEFAULT_EXPORT = /export default (?:function |class |memo\(|forwardRef\()?(\w+)/;
 
@@ -169,15 +146,8 @@ describe('a file is named after what it exports', () => {
 
 // ------------------------------------------- the view model is tested in place
 //
-// AGENTS.md > Layout > Where tests go: "Frontend tests sit beside what they
-// test: `turns.test.ts` next to `turns.ts`. Vitest finds them anywhere, the
-// file it covers is one line away in the listing, and a module with no
-// neighbouring test is visible at a glance."
-//
-// The top-level `.ts` files are pure functions of their input — that is the
-// whole reason they are not in `components/` — so there is no excuse for one
-// without a test, and no renderer needed to write it. This is the check that
-// keeps the bar where AGENTS.md puts it for putting a file there at all.
+// Every top-level `.ts` module is a pure function of its input, so each has a
+// test beside it.
 
 describe('every top-level view-model module has a test beside it', () => {
   const modules = FILES.filter(

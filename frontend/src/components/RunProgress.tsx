@@ -6,12 +6,8 @@ interface Props {
 }
 
 /**
- * A run's transfers as one bar: paid, in flight, queued, failed.
- *
- * The same colours as the status pills, so a segment means what a pill of that
- * colour means — in flight is the pending colour, not success, for the reason
- * `StatusPill` gives. Widths animate, so a run being worked through is visibly
- * *moving* rather than jumping between snapshots.
+ * A run's transfers as one bar: paid, in flight, queued, failed, in the status
+ * pill colors.
  */
 export default function RunProgress({ run }: Props) {
   const progress = progressOf(run.byStatus);

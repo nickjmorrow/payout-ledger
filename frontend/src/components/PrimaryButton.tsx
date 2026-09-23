@@ -1,11 +1,8 @@
 import type { ButtonHTMLAttributes } from 'react';
 
 /**
- * The one action a form exists for.
- *
- * Disabled is a different fill, not a fainter one: 40% of the accent read as
- * a muted but pressable button in the dark theme, and a button that looks
- * ready and does nothing is worse than one that plainly is not.
+ * A form's submit button. Disabled is a different fill, not a fainter one, so it
+ * never looks pressable.
  */
 export default function PrimaryButton({
   className = '',

@@ -11,11 +11,8 @@ import { formatMoney, parseMajor } from 'src/money';
 const CURRENCY = 'USD';
 
 /**
- * Authorize a payment to one recipient.
- *
- * The amount is checked here for an immediate answer; the API and a CHECK
- * constraint are what make it true for every caller. The amount is kept until
- * the API accepts it, so a refusal can be corrected rather than retyped.
+ * Authorizes a payment to one recipient. The amount is kept until the API accepts
+ * it, so a refusal can be corrected rather than retyped.
  */
 export default function DisburseForm() {
   const recipientField = useId();
@@ -57,8 +54,6 @@ export default function DisburseForm() {
           </label>
           <SelectInput
             aria-busy={isLoadingRecipients}
-            // Disabled until there is someone to choose: an empty list that
-            // looks ready invites a click that finds nothing.
             disabled={recipients === undefined}
             id={recipientField}
             onChange={(event) => {

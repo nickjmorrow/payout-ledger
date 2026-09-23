@@ -9,16 +9,8 @@ interface State {
 }
 
 /**
- * The last line of defence.
- *
- * Without one of these, a single render throwing anywhere in the tree unmounts
- * the whole app and leaves a blank white page — no message, no reload button,
- * nothing in the UI to tell you it even happened. That is the worst failure
- * mode an app has, and it costs twenty lines to replace with a sentence.
- *
- * Still a class component, and not because nobody got round to it: this is the
- * one thing React has no hook for. `componentDidCatch` has no function
- * equivalent.
+ * Replaces a blank page with a message when a render throws. A class component,
+ * because React has no hook for `componentDidCatch`.
  */
 export default class ErrorBoundary extends Component<Props, State> {
   static getDerivedStateFromError(error: Error): State {
@@ -28,9 +20,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null };
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    // Where an error tracker goes. Until there is one, the console is the only
-    // record that exists — a white page tells you nothing, and this at least
-    // leaves the stack somewhere a developer will look.
+    // Where an error tracker would go.
     console.error('Unhandled render error', error, info.componentStack);
   }
 

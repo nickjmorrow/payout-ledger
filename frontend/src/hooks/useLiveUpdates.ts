@@ -4,23 +4,15 @@ import { openEventStream } from 'src/api/events';
 import { type ChangeEvent, keysToInvalidate } from 'src/events';
 
 /**
- * How long to gather notices before acting on them.
- *
- * A single settlement is two or three notices — the transfer, the task that
- * settled it, the next one queued — and a payment run is dozens. Refreshing on
- * each would re-read the same list many times a second; gathering for a beat
- * reads it once, and every view refreshes in the same moment.
+ * Notices are batched for this long, so a burst (a settlement is several, a run
+ * dozens) re-reads each query once.
  */
 const BATCH_MS = 150;
 
 /**
- * Keep every query current by listening for changes rather than asking.
- *
- * Mounted once, at the top of the page. A notice invalidates the queries it
- * affects and TanStack re-reads whichever of them are on screen; the rest are
- * marked stale and re-read when they next appear. On `ready` — every connect,
- * reconnects included — everything is invalidated, because whatever changed
- * while the stream was down was never heard.
+ * Keeps every query current from the event stream. Mounted once. A notice
+ * invalidates what it affects; `ready` invalidates everything, since changes made
+ * while the stream was down were never heard.
  */
 export default function useLiveUpdates(): void {
   const queryClient = useQueryClient();

@@ -1,20 +1,8 @@
-"""The chart of accounts, and enough data to see the thing work.
+"""The chart of accounts, and demo data.
 
-Two different jobs in one module, deliberately kept apart below:
-
-  **The chart of accounts is not demo data.** A programme funding account and a
-  provider settlement account have to exist before any transfer can be
-  authorised — `ledger_service.system_account` raises without them — so this is
-  required setup, and it runs on every boot.
-
-  **The recipients and the opening balance are demo data.** They exist so that
-  a fresh `docker compose up` shows a working system rather than an empty one.
-  Set `SEED_DEMO_DATA=false` to skip them and keep the chart.
-
-**Idempotent, because it runs on every boot.** Everything here is either an
-`ON CONFLICT DO NOTHING` insert or guarded by a check, so a second run is a
-no-op. That matters more than it looks: the opening balance is a journal entry,
-and a seeder that posted it twice would double the fund on every restart.
+The chart of accounts is required setup: no transfer can be authorized
+without it. The recipients and opening balance are demo data, skipped when
+`SEED_DEMO_DATA=false`. Idempotent, because it runs on every boot.
 
 Run with `python -m app.seed`.
 """
@@ -39,16 +27,8 @@ CURRENCY = "USD"
 # The opening balance the demo program starts with: $1,000,000.
 OPENING_BALANCE_MINOR = 1_000_000_00
 
-# Names and numbers are obviously fictional. The numbers are in 555-0100
-# through 555-0199, the block reserved for fiction, so none of them can ring
-# anybody — and all are +1, matching the currency, so the demo reads as one
-# coherent program rather than a pile of unrelated test rows.
-#
-# Twenty-four rather than a handful so a payment run is a real batch: enough
-# transfers that the queue visibly works through them, and that two workers
-# claiming with SKIP LOCKED take different ones. Appending here is safe on a
-# database seeded with fewer — the insert below is ON CONFLICT DO NOTHING on
-# the number, so the originals stay and only the new ones arrive.
+# Fictional names, and numbers from 555-0100 to 555-0199, the block reserved
+# for fiction. Twenty-four, so a payment run is a real batch.
 DEMO_RECIPIENTS = [
     ("Ava Johnson", "+12025550101"),
     ("Brandon Lee", "+12025550102"),
@@ -86,9 +66,7 @@ async def seed_chart_of_accounts(session: AsyncSession) -> None:
         await session.execute(
             pg_insert(Account)
             .values(name=name, kind=kind, currency=CURRENCY)
-            # The unique index is partial (system accounts have a null
-            # recipient), so its predicate has to be restated here or Postgres
-            # will not match it.
+            # The unique index is partial; Postgres only matches it if the predicate is restated.
             .on_conflict_do_nothing(
                 index_elements=["kind", "currency"],
                 index_where=Account.recipient_id.is_(None),
@@ -107,11 +85,8 @@ async def seed_demo_data(session: AsyncSession) -> None:
         )
     await session.commit()
 
-    # Guarded rather than ON CONFLICT: a journal entry has no natural key to
-    # conflict on, so the check is "has this programme ever been funded".
-    # Without it every restart would post another opening balance and the fund
-    # would grow on its own — which would also keep the books balanced, and so
-    # would never be caught by any constraint.
+    # Guarded rather than ON CONFLICT, because a journal has no natural key. A
+    # second opening balance would balance, so no constraint would catch it.
     funded = await session.execute(
         select(func.count()).select_from(JournalEntry).where(JournalEntry.kind == "funding_deposit")
     )

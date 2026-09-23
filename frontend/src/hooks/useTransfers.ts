@@ -4,11 +4,8 @@ import useLiveStatus from 'src/hooks/useLiveStatus';
 import { pollIntervalFor } from 'src/polling';
 
 /**
- * Disbursements, newest first — all of them, or the ones in one payment run.
- * Kept current by the event stream, polled when it is down.
- *
- * The interval is computed from this query's own data rather than through
- * `usePollInterval`, which reads this hook — the one place the cadence starts.
+ * Disbursements, newest first: all of them, or one payment run's. Computes its own
+ * interval, because `usePollInterval` is derived from this query.
  */
 export default function useTransfers(runId: null | string = null): UseQueryResult<Transfer[]> {
   const isLive = useLiveStatus() === 'live';

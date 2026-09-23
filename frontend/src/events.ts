@@ -1,21 +1,14 @@
 /**
- * What a change notice means for the console's queries. Pure, no React.
+ * Which queries a change notice re-reads. Pure, no React.
  *
- * The server says *what* moved — a transfer, a task, a finding — and never
- * what it now contains. This decides which queries to re-read as a result,
- * which is the whole of the browser's side of the live path. Keeping it a
- * function of data means the mapping can be tested without a stream, a
- * renderer, or a clock.
+ * The server says what moved, never what it now contains.
  */
 
 import { ledgerKeys } from 'src/api/ledger';
 
 /**
- * The families a change can belong to.
- *
- * Mirrors `Topic` in `backend/app/wire.py`. The backend's structural suite
- * reads this array and fails when the two differ, because a topic the browser
- * has not heard of is a change it silently never shows.
+ * What a change can be about. Must match `Topic` in backend/app/wire.py; a
+ * structural test checks it.
  */
 export const TOPICS = ['transfers', 'tasks', 'findings'] as const;
 
@@ -41,15 +34,10 @@ export function isChangeEvent(value: unknown): value is ChangeEvent {
 }
 
 /**
- * The query keys to invalidate for a batch of changes: deduplicated, and with
- * any key already covered by a shorter one dropped.
+ * The query keys to invalidate for a batch of changes, deduplicated, with any
+ * key covered by a shorter one dropped.
  *
- * **The overview goes with everything.** Its balances move when a transfer
- * does, and its "needs attention" count moves when a task dead-letters or a
- * finding appears. Refreshing it in the same batch as the list is what keeps a
- * settled transfer from sitting beside a float balance from before it
- * settled — the bug the shared polling cadence was built to prevent, now
- * prevented the same way: one moment, every view.
+ * The overview is refreshed with every change, so balances never lag the list.
  */
 export function keysToInvalidate(events: readonly ChangeEvent[]): QueryKey[] {
   const keys: QueryKey[] = [];
@@ -62,15 +50,12 @@ export function keysToInvalidate(events: readonly ChangeEvent[]): QueryKey[] {
       }
       case 'tasks': {
         keys.push(ledgerKeys.tasks);
-        // A task's transfer may have its history open. Its row in the list has
-        // not changed — a task moving is not a transfer moving — so only that
-        // one detail is re-read, not the whole family.
+        // Refresh only that transfer's history: a task moving is not a transfer moving.
         if (event.transferId !== null) keys.push(ledgerKeys.transfer(event.transferId));
         break;
       }
       case 'transfers': {
-        // A run's progress is its transfers' statuses, so a transfer moving is
-        // a run moving. No topic of its own: there is nothing on a run to change.
+        // A run's progress is its transfers' statuses, so it moves with them.
         keys.push(ledgerKeys.transfers, ledgerKeys.runs);
         break;
       }

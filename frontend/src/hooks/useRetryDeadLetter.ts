@@ -9,13 +9,8 @@ export interface RetryDeadLetter {
 }
 
 /**
- * Retry one dead-lettered task.
- *
- * Unlike the forms that move money, this holds no idempotency key, because
- * the server does not need one: a task that is no longer dead is refused, so
- * pressing the button twice is refused the second time rather than doubled.
- * A refusal for a payment that already finished comes back as the error, in
- * words the operator can act on.
+ * Retries one dead-lettered task. No idempotency key: the server refuses a task
+ * that is no longer dead, so a double press is refused rather than doubled.
  */
 export default function useRetryDeadLetter(taskId: string): RetryDeadLetter {
   const queryClient = useQueryClient();

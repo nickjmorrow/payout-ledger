@@ -8,10 +8,7 @@ import 'src/index.css';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // On, because this tab is not the only writer: the worker settles
-      // payments in the background and another operator may be disbursing.
-      // The event stream carries most of that; this covers a tab that was
-      // asleep while it happened.
+      // The worker and other operators change data too; this catches a tab that slept.
       refetchOnWindowFocus: true,
       retry: 1,
     },

@@ -1,40 +1,8 @@
 """Comparing our books against the provider's records, and saying where they differ.
 
-Everything else in this system is built so that a single failure cannot lose or
-duplicate money: idempotency keys, balanced journals, a queue that retries.
-Reconciliation exists because that is not enough. It catches the failures that
-happen *between* the guarantees — a send whose response we never saw, a
-settlement we stopped polling for, a payment they have and we do not. Those
-leave no error anywhere; the only way to find them is to compare two
-independent records and notice they disagree.
-
-**Which is why the provider's payments are their own table.** If their records
-lived on our `transfers` rows, this module would be comparing a row to itself
-and would always pass.
-
-Five kinds of disagreement, and the split between what is healed and what is
-only reported is the whole judgement of this file:
-
-  status_behind        They say settled, we still say in flight. **Healed.**
-                       They are authoritative about their own payments, and
-                       this is just a poll we missed.
-  status_contradicted  They say failed, we say succeeded (or the reverse in a
-                       way that is not merely behind). **Reported.** Our books
-                       already moved money on the strength of the other answer,
-                       and unwinding that automatically on one disagreement is
-                       how a glitch becomes a reversal storm.
-  missing_at_provider  We believe we sent it; they have no record. **Reported.**
-                       Either our send never landed or they lost it, and those
-                       need opposite responses — re-send, or investigate. A
-                       machine cannot tell which from here.
-  unknown_to_us        They have a payment we cannot match to a transfer.
-                       **Reported**, and the most serious: money left the float
-                       without our books knowing.
-  amount_mismatch      Same payment, different amount. **Reported**, always.
-
-The rule behind that split: heal only where the provider is authoritative and
-we are merely out of date. Anywhere the two records genuinely contradict each
-other, a person decides.
+Heal only where the provider is authoritative and we are merely out of date
+(`status_behind`); report everything else for a person to decide. See
+AGENTS.md > Reconciliation for what each kind of finding means.
 """
 
 from dataclasses import dataclass, field
@@ -77,11 +45,8 @@ async def run(
 ) -> Report:
     """Compare both sides over a window and record every disagreement.
 
-    `since` is a window rather than "everything" because this runs repeatedly
-    and forever: a full scan is affordable now and will not be, and a job whose
-    cost grows with total history is one that quietly stops completing. The
-    window must comfortably exceed the longest a payment can legitimately take
-    to settle, or a payment still in flight looks like drift on every pass.
+    A window, so the cost does not grow with total history. It must exceed the
+    longest a payment can take to settle, or in-flight payments look like drift.
     """
     if since is None:
         since = datetime.now(UTC) - timedelta(days=1)
@@ -97,8 +62,7 @@ async def run(
         report.checked += 1
 
         if transfer.provider_reference is None:
-            # Still `pending`: we have not handed it over yet, so there is
-            # nothing on their side to disagree with. Not drift.
+            # Not handed over yet, so nothing on their side to disagree with.
             continue
 
         payment = theirs.get(transfer.provider_reference)
@@ -141,8 +105,7 @@ async def run(
         )
 
     await session.flush()
-    # After the flush, so each finding has its id. Delivered at the caller's
-    # commit, in the same transaction that recorded them.
+    # After the flush, so each finding has its id.
     for finding in report.findings:
         await announce(
             session, topic="findings", subject_id=finding.id, transfer_id=finding.transfer_id
@@ -177,14 +140,12 @@ async def _compare(
                 f"the provider recorded {payment.amount_minor} {payment.currency}"
             ),
         )
-        # Deliberately no status comparison after this. With the amounts in
-        # disagreement the statuses are not comparable anyway, and healing on
-        # top of a mismatch would settle the wrong number.
+        # No status comparison: healing on top of a mismatch would settle the
+        # wrong amount.
         return
 
     if transfer.status == "processing" and payment.status in {"succeeded", "failed"}:
-        # The benign case, and the common one: a settlement poll we missed.
-        # They are authoritative about their own payment.
+        # A settlement poll we missed. They are authoritative about their own payment.
         finding = _record(
             report,
             session,
@@ -280,14 +241,10 @@ async def recent_findings(session: AsyncSession, *, limit: int = 50) -> list[Rec
 
 
 async def currently_reported(session: AsyncSession) -> int:
-    """How many distinct problems reconciliation is still reporting.
+    """Distinct unhealed problems reported within the last two passes.
 
-    Not a count of rows: a problem that persists is reported again by every
-    pass, so the same one would count once per pass, forever. Counted instead
-    are distinct unhealed problems -- a kind of disagreement and the payment it
-    is about -- seen within the last two passes. When a pass stops reporting
-    one, it leaves the count, which is how "the absence is the record of the
-    resolution" reads on the console.
+    Distinct, because every pass re-reports a persisting problem; recent, so a
+    problem that stops being reported leaves the count.
     """
     window = timedelta(seconds=2 * settings.reconcile_interval_seconds)
     problem = func.concat(

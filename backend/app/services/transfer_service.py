@@ -1,26 +1,8 @@
-"""Disbursing money to a recipient: the domain flow above the books.
+"""Disbursing money to one recipient: the lifecycle above the books.
 
-A transfer has two lives. The `transfers` row is the *intent* and its progress,
-mutable, with a status. The journal entries are what actually happened,
-immutable. Keeping them separate is what lets a transfer fail and be retried
-without the books ever showing a payment that did not occur.
-
-The states, and what each one means in the ledger:
-
-  pending     authorised. The fund has been debited and the recipient is owed
-              the money, but nothing has left the provider. `transfer_authorized`
-              is posted.
-  processing  handed to the provider, who has accepted it. No new posting — the
-              books already say what they need to.
-  succeeded   the provider confirms the recipient was paid. `transfer_settled`
-              clears the payable and spends the float.
-  failed      it will not happen. `transfer_reversed` undoes the authorisation
-              and returns the money to the fund.
-
-**Authorising debits the fund immediately, before the money moves.** That is
-deliberate and is the conservative direction: the programme should not be able
-to promise the same dollar twice while a payment is in flight. The money
-comes back on reversal if the payment fails.
+Authorizing debits the fund before any money moves, so the same dollar cannot
+be promised twice; reversal returns it. See AGENTS.md > The transfer lifecycle
+for each status and the journal it posts.
 """
 
 import uuid
@@ -38,13 +20,10 @@ from app.services.ledger_service import Posting
 
 logger = get_logger(__name__)
 
-# The task kind the worker claims to actually send the payment. Registered in
-# worker/handlers.py.
+# Registered in worker/disburse.py.
 DISBURSE = "disburse_transfer"
 
-# How long to wait before asking the provider what became of a payment. Short
-# enough that the demo moves, long enough that the first check is not certain
-# to find it still pending.
+# How long after sending to ask the provider what became of a payment.
 SETTLE_CHECK_DELAY_SECONDS = 3
 
 
@@ -57,7 +36,7 @@ class UnknownRecipientError(TransferError):
 
 
 class InsufficientFundsError(TransferError):
-    """The programme fund does not hold enough to authorise this."""
+    """The program fund does not hold enough to authorize this."""
 
 
 async def initiate(
@@ -69,12 +48,10 @@ async def initiate(
     request_id: str | None = None,
     run_id: uuid.UUID | None = None,
 ) -> Transfer:
-    """Authorise a disbursement and queue it to be sent. **Does not commit.**
+    """Authorize a disbursement and queue it to be sent. Does not commit.
 
-    Everything this writes — the transfer, the journal, and the task that will
-    send the payment — lands in the caller's transaction, together or not at
-    all. That is the outbox pattern, and here it needs no extra machinery
-    because the queue is a table: see `task_service.enqueue`.
+    The transfer, its journal and the task that sends it land together in the
+    caller's transaction.
     """
     recipient = await session.get(Recipient, recipient_id)
     if recipient is None:
@@ -84,9 +61,7 @@ async def initiate(
         session, kind="program_funding", currency=currency
     )
 
-    # Taken *before* the balance is read. Two concurrent transfers that both
-    # read first would both see enough and both post, overdrawing a fund while
-    # every journal balances perfectly. See `ledger_service.lock_account`.
+    # Before the balance is read, or two concurrent transfers can overdraw it.
     await ledger_service.lock_account(session, account_id=funding.id)
 
     available = await ledger_service.balance(session, account_id=funding.id)
@@ -144,12 +119,7 @@ async def initiate(
 async def mark_processing(
     session: AsyncSession, *, transfer: Transfer, provider_reference: str
 ) -> None:
-    """The provider has accepted it. No posting — the books already say enough.
-
-    Recording their reference is what makes the transfer findable from their
-    side, which is what reconciliation needs and what lets a retry ask "did
-    this one actually land" instead of sending it again.
-    """
+    """The provider has accepted it. No posting: the books already say enough."""
     transfer.status = "processing"
     transfer.provider_reference = provider_reference
     await session.flush()
@@ -187,13 +157,7 @@ async def mark_succeeded(session: AsyncSession, *, transfer: Transfer) -> None:
 
 
 async def mark_failed(session: AsyncSession, *, transfer: Transfer, reason: str) -> None:
-    """It will not happen: reverse the authorisation and return the money.
-
-    A reversing journal rather than deleting the original. Both the promise and
-    its withdrawal stay in the history, which is the entire reason to keep
-    books this way — and is what lets someone answer "why did this recipient's
-    balance move twice" months later.
-    """
+    """It will not happen: post a reversing journal and return the money to the fund."""
     if transfer.status == "failed":
         return
 

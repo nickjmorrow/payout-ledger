@@ -1,11 +1,4 @@
-"""Disbursement endpoints.
-
-Thin, like every route here: validate, authorize, call a service, respond. The
-only thing with any judgement in it is the idempotency dance in `create`, which
-lives in `api/idempotent.py` rather than in a service because it is about HTTP —
-it turns four service outcomes into four status codes, and the stored response
-it replays is a response.
-"""
+"""Disbursement endpoints. Thin: validate, authorize, call a service, respond."""
 
 import uuid
 from typing import Annotated, Any
@@ -32,23 +25,12 @@ async def create(
     session: DbSession,
     response: Response,
     _user: CurrentUser,
-    # min_length because a key short enough to collide by accident is worse
-    # than no key: two unrelated requests would silently become one, and the
-    # second caller would be handed a payment it never made.
+    # Long enough not to collide by accident.
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=8)],
 ) -> ApiResponse[TransferOut]:
-    """Authorise a disbursement and queue it to be sent.
+    """Authorize a disbursement and queue it to be sent, in one transaction.
 
-    **The key is required, not optional.** An endpoint that moves money and
-    accepts a request without one is an endpoint that will eventually pay
-    somebody twice — the caller cannot retry safely and has no way to find out
-    whether its first attempt landed. Making it a required header pushes that
-    problem to the one place that can solve it: the client, which is the only
-    party that knows two requests are the same request.
-
-    Everything below happens in one transaction. The transfer, the journal, the
-    idempotency record and the queued payment all commit together or not at
-    all.
+    `Idempotency-Key` is required: see AGENTS.md > Idempotency.
     """
     payload: dict[str, Any] = body.model_dump(mode="json", by_alias=True)
 
@@ -56,11 +38,8 @@ async def create(
         session, key=idempotency_key, endpoint=ENDPOINT, body=payload, response=response
     )
     if replay is not None:
-        # Not re-derived from the transfer row: what the caller gets back must
-        # be what the first request actually returned, even if the transfer has
-        # moved on since. A replay that reported the *current* status would
-        # make two identical requests give two different answers, which is the
-        # one thing idempotency is supposed to rule out.
+        # The stored response, not one re-derived from the transfer: identical
+        # requests must get identical answers.
         return ApiResponse(data=TransferOut.model_validate(replay.body))
 
     try:
@@ -74,8 +53,7 @@ async def create(
     except transfer_service.UnknownRecipientError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except transfer_service.InsufficientFundsError as exc:
-        # 422 and not 402 Payment Required: 402 is about the *caller* owing
-        # money, which is not what happened. The programme fund is short.
+        # 422, not 402: the program fund is short, not the caller.
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
     out = TransferOut.from_transfer(transfer)
@@ -106,13 +84,7 @@ async def list_transfers(
 async def get_transfer(
     transfer_id: uuid.UUID, session: DbSession, _user: CurrentUser
 ) -> ApiResponse[TransferDetailOut]:
-    """One transfer, with everything that happened to it.
-
-    The journal entries are the books' account of it and the tasks are the
-    worker's; between them a person can see the fund debited at authorisation,
-    the send and each settlement check, and the reversal if it failed — with
-    both the promise and its withdrawal still on the page.
-    """
+    """One transfer, with its journals and its worker tasks."""
     transfer = await transfer_service.get(session, transfer_id=transfer_id)
     if transfer is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such transfer.")

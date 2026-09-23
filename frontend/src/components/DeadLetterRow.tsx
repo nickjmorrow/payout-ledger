@@ -8,11 +8,8 @@ interface Props {
 }
 
 /**
- * One piece of work that ran out of attempts, why, and a way to try again.
- *
- * Its own component so each row carries its own retry state: the refusal for
- * a payment that already finished belongs under that payment, not in a banner
- * that has to say which one it meant.
+ * One dead-lettered task and a Retry. Each row holds its own retry state, so a
+ * refusal shows under the task it refers to.
  */
 export default function DeadLetterRow({ task }: Props) {
   const { error, isPending, retry } = useRetryDeadLetter(task.id);

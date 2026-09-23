@@ -1,15 +1,8 @@
-"""Request context and access logging.
+"""Request ids and access logging.
 
-**Pure ASGI, not `BaseHTTPMiddleware`.** The convenient base class buffers the
-response body to hand it to you as one object, which for a Server-Sent Events
-endpoint means the stream arrives all at once at the end — the exact failure the
-`X-Accel-Buffering` header elsewhere exists to prevent. Forty lines of ASGI
-avoids it entirely.
-
-The request id is bound into `structlog.contextvars`, so every log line for the
-rest of the request carries it without a single call site passing it along. That
-machinery was already wired up in `logging.py` — `merge_contextvars` has always
-been in the processor chain — and nothing had ever bound anything to it.
+Pure ASGI rather than `BaseHTTPMiddleware`, which buffers the response body and
+would deliver the event stream in one lump. The request id is bound into
+structlog's context, so every log line carries it.
 """
 
 import time
@@ -43,8 +36,7 @@ class RequestContextMiddleware:
             return
 
         headers = {k.decode(): v.decode() for k, v in scope.get("headers", [])}
-        # Honour an id from upstream — a load balancer, another service — so one
-        # trace survives more than one hop. Mint one otherwise.
+        # Keep an id from upstream, so one trace survives more than one hop.
         request_id = headers.get(REQUEST_ID_HEADER) or new_request_id()
 
         structlog.contextvars.clear_contextvars()
@@ -59,10 +51,7 @@ class RequestContextMiddleware:
             if message["type"] == "http.response.start":
                 MutableHeaders(scope=message).append(REQUEST_ID_HEADER, request_id)
 
-                # Timed to the first byte, not to the last. For a stream the
-                # time to the last byte is how long someone watched it, which is
-                # not latency and would make every SSE request look like an
-                # outage.
+                # Time to first byte: for a stream, time to last byte is how long someone watched.
                 logger.info(
                     "request finished",
                     method=method,
@@ -82,11 +71,7 @@ class RequestContextMiddleware:
 
 
 def current_request_id() -> str | None:
-    """The id bound to this request, for anything that needs to carry it further.
-
-    Used when enqueueing a task: the id is stored on the row so the worker can
-    re-bind it and one turn stays greppable across two processes.
-    """
+    """The id bound to this request, stored on tasks it enqueues so the worker can re-bind it."""
     bound: dict[str, Any] = structlog.contextvars.get_contextvars()
     value = bound.get("request_id")
     return str(value) if value else None
