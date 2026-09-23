@@ -3,7 +3,7 @@
 # Wipe the public demo's database and bring it back freshly seeded. Runs on the
 # server, nightly, from the cron file scripts/deploy.sh installs.
 #
-#   APP=ledger /opt/ledger/scripts/reset-demo.sh
+#   APP=payout-ledger /opt/payout-ledger/scripts/reset-demo.sh
 #
 # The console has no accounts, so anyone can authorise payments — which is the
 # point of a demo, and means the fund drains and the lists fill up. A reset

@@ -21,7 +21,7 @@
 # Still missing, deliberately, because they depend on where you deploy: TLS
 # (terminate it at your platform's load balancer or put Caddy in front),
 # secrets management, log shipping, and backups.
-name: ledger-prod
+name: payout-ledger-prod
 
 services:
   db:

@@ -36,7 +36,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     logger.info("app stopped")
 
 
-app = FastAPI(title="Ledger", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Payout Ledger", version="0.1.0", lifespan=lifespan)
 
 # Only needed if you run the frontend outside Docker against this directly. In
 # the compose setup Vite proxies /api, so requests are same-origin and this

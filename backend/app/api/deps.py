@@ -49,9 +49,10 @@ async def get_current_user(
     verifying a bearer token against that provider's JWKS. Nothing downstream
     changes either way, because everything downstream only ever wanted a user id.
 
-    The token's `sub` becomes that id. It goes straight into `conversations.user_id`
-    and therefore into the WHERE clause of every query — which is the property
-    that makes turning this on safe rather than the beginning of an audit.
+    The token's `sub` becomes that id, and anything scoped to a user filters on
+    it in the WHERE clause rather than checking afterwards — which is the
+    property that makes turning this on safe rather than the beginning of an
+    audit.
     """
     if not settings.auth_enabled:
         return DEV_USER_ID

@@ -1,7 +1,7 @@
 [project]
-name = "ledger-backend"
+name = "payout-ledger-backend"
 version = "0.1.0"
-description = "Reference architecture: FastAPI + Postgres"
+description = "Payout Ledger: disbursements for unconditional cash transfers, on double-entry books"
 requires-python = ">=3.13"
 
 dependencies = [
@@ -11,11 +11,6 @@ dependencies = [
     "asyncpg>=0.30",
     "pydantic-settings>=2.8",
     "structlog>=25.1",
-    # The IANA timezone database, for the example tool. Python's `zoneinfo`
-    # reads the system copy when there is one and falls back to this package
-    # when there is not — which is the difference between the tool working and
-    # raising on a slimmer base image than the one in Dockerfile.
-    "tzdata>=2025.1",
     "alembic>=1.14",
     # JWT verification. NOT python-jose, which is unmaintained and carries
     # CVE-2024-33663 (algorithm confusion); FastAPI's own docs moved off it.

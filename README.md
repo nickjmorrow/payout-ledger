@@ -1,4 +1,4 @@
-# Ledger
+# Payout Ledger
 
 A disbursement service for unconditional cash transfers. A programme sends money
 to recipients through a mobile-money provider, and the books stay correct while
@@ -151,7 +151,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up --build -d
 ### The public demo
 
 ```bash
-scripts/deploy.sh root@203.0.113.5 ledger.203-0-113-5.sslip.io
+scripts/deploy.sh root@203.0.113.5 payout-ledger.203-0-113-5.sslip.io
 ```
 
 One server over SSH, safe to re-run. It installs Docker and Caddy, writes a
@@ -191,7 +191,7 @@ management, log shipping, and backups.
 backend/          FastAPI app + worker — see AGENTS.md § Layout
 backend/alembic/  Migrations; versions/ is the schema's history
 frontend/         The disbursement console
-scripts/          setup.sh and check.sh — the only two you run by hand
+scripts/          setup.sh, check.sh, and deploy.sh for the public demo
 AGENTS.md         The conventions, and the reasoning. The actual deliverable.
 ```
 

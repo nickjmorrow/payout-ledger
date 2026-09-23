@@ -9,14 +9,13 @@ interface Props {
 /**
  * The reading column: one width, shared by everything stacked in it.
  *
- * The header, the transcript and the composer are three separate subtrees, and
- * they have to be — the scroll container has to span the whole pane so that its
- * scrollbar lands at the edge of the window rather than hard against the text.
- * That leaves three places which must agree on where the text starts and stops,
- * and a component is the cheapest way to make disagreeing impossible.
+ * The header and the page body are separate subtrees, and they have to be —
+ * the scroll container has to span the whole pane so that its scrollbar lands
+ * at the edge of the window rather than hard against the text. That leaves two
+ * places which must agree on where the text starts and stops, and a component
+ * is the cheapest way to make disagreeing impossible.
  *
- * Anything full-bleed — the rule under the header, the rule over the composer —
- * goes OUTSIDE it. Anything that bleeds slightly past the text, like the hover
+ * Anything full-bleed — the rule under the header — goes OUTSIDE it. Anything that bleeds slightly past the text, like the hover
  * background of an icon button sitting in the margin, goes inside and lives in
  * the padding, which is also what stops the scroll container clipping it.
  */

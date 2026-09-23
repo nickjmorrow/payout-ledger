@@ -5,8 +5,8 @@
 # run is a redeploy.
 #
 #   scripts/deploy.sh root@203.0.113.5                          # https://203-0-113-5.sslip.io
-#   scripts/deploy.sh root@203.0.113.5 ledger.203-0-113-5.sslip.io
-#   scripts/deploy.sh root@203.0.113.5 ledger.example.com       # DNS already pointed
+#   scripts/deploy.sh root@203.0.113.5 payout-ledger.203-0-113-5.sslip.io
+#   scripts/deploy.sh root@203.0.113.5 payout.example.com       # DNS already pointed
 #
 # Ported from the same script in clinical-copilot, and built to share a server
 # with it. Everything this creates is named after APP (default: this folder's
@@ -116,12 +116,15 @@ fi
 port="$(remote "sed -n 's/^PUBLIC_PORT=//p' $remote_dir/.env.prod")"
 
 say "Copying the code"
-# .env.prod is excluded so --delete can never remove the server's copy. Only
-# options old enough for macOS's openrsync.
+# .env.prod is excluded so --delete can never remove the server's copy, and so
+# is whatever this clone's .git/info/exclude keeps out of git — local editor and
+# tool state has no business on a server. Only options old enough for macOS's
+# openrsync.
 rsync -az --delete --stats -e "ssh ${ssh_opts[*]}" \
   --exclude .git --exclude .env --exclude .env.prod --exclude .DS_Store \
   --exclude node_modules --exclude .venv --exclude dist \
   --exclude __pycache__ --exclude .pytest_cache --exclude .ruff_cache \
+  --exclude-from=.git/info/exclude \
   ./ "$target:$remote_dir/"
 
 say "Building and starting (the first build takes a few minutes)"

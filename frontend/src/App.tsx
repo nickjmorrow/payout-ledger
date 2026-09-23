@@ -32,10 +32,10 @@ export default function App() {
       <header className={'border-b border-ink/5'}>
         <Column className={'flex items-center justify-between py-4'}>
           <div>
-            <h1 className={'text-sm font-medium tracking-tight text-ink'}>
-              {'Unconditional cash transfers'}
-            </h1>
-            <p className={'text-xs text-ink-muted'}>{'Disbursement console'}</p>
+            <h1 className={'text-sm font-medium tracking-tight text-ink'}>{'Payout Ledger'}</h1>
+            <p className={'text-xs text-ink-muted'}>
+              {'Unconditional cash transfers · disbursement console'}
+            </p>
           </div>
           <div className={'flex items-center gap-4'}>
             <LiveIndicator />

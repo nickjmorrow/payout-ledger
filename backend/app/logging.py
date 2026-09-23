@@ -9,7 +9,7 @@ Conventions (these are the rules, not suggestions — see AGENTS.md § Logging):
 * Never pass an ORM model as a kwarg, even one with a nice __repr__ — it
   serializes unpredictably and can drag a lazy-load into your log call.
 
-    logger.info("conversation created", conversation_id=c.id, user_id=user_id)
+    logger.info("transfer initiated", transfer_id=str(t.id), amount_minor=t.amount_minor)
 """
 
 import logging

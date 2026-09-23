@@ -11,7 +11,7 @@
 # CORS_ORIGINS follows FRONTEND_PORT, so moving the frontend does not silently
 # break the browser's requests. In the compose setup Vite proxies /api anyway,
 # so this only matters if you run the frontend on the host.
-name: ledger
+name: payout-ledger
 
 services:
   db:

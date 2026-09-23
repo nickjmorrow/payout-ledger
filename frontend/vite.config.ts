@@ -34,7 +34,7 @@ export default defineConfig({
   },
   test: {
     // Node, not jsdom. Everything tested here is a pure function of data — the
-    // fold in `turns.ts`, the split in `markdown.ts`, the formatters — and
+    // money parsing, the event-to-query mapping, the formatters — and
     // there is deliberately no component rendering in the suite. Components in
     // this app are arrangement; the logic worth pinning was moved out of them
     // on purpose, and testing the arrangement instead would mean a DOM, a

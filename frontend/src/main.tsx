@@ -8,10 +8,10 @@ import 'src/index.css';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // On, because this tab is no longer the only writer: a scheduled agent
-      // run creates conversations on its own, and without this you would not
-      // see one until you reloaded. This is the line the comment here used to
-      // tell you to change once something else could write. Something can.
+      // On, because this tab is not the only writer: the worker settles
+      // payments in the background and another operator may be disbursing.
+      // The event stream carries most of that; this covers a tab that was
+      // asleep while it happened.
       refetchOnWindowFocus: true,
       retry: 1,
     },

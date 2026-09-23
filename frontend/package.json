@@ -1,5 +1,5 @@
 {
-  "name": "ledger-frontend",
+  "name": "payout-ledger-frontend",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.34.5",
@@ -17,9 +17,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.66.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

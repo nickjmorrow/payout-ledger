@@ -49,18 +49,6 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          // "Answers are markdown; never enable raw HTML." `react-markdown`
-          // builds elements; `rehype-raw` makes it set innerHTML instead, which
-          // turns every model answer into an injection surface. The rule is
-          // here rather than in a review checklist because it is one `pnpm add`
-          // and one line away at any time.
-          paths: [
-            {
-              message:
-                'rehype-raw turns model output into raw HTML. Markdown.tsx must stay element-building (AGENTS.md > Frontend).',
-              name: 'rehype-raw',
-            },
-          ],
           patterns: [
             {
               group: ['./*', '../*'],
@@ -77,7 +65,7 @@ export default tseslint.config(
         'error',
         {
           message:
-            'EventSource cannot set headers or POST. Use fetch + ReadableStream (src/api/stream.ts).',
+            'EventSource cannot set headers or POST. Use fetch + ReadableStream (src/api/events.ts).',
           name: 'EventSource',
         },
       ],
@@ -117,7 +105,7 @@ export default tseslint.config(
       'perfectionist/sort-objects': ['error', { type: 'alphabetical' }],
 
       // NOT enabled: sort-interfaces / sort-object-types. The wire shapes in
-      // `src/api/conversations.ts` mirror the field order of the Pydantic
+      // `src/api/ledger.ts` mirror the field order of the Pydantic
       // models in `backend/app/api/schemas.py`, and keeping the two greppable
       // side by side is worth more than alphabetising them.
 
@@ -139,8 +127,8 @@ export default tseslint.config(
 
       // ---- unicorn: off, and why -----------------------------------------
 
-      // `null` is the wire format. The backend sends `null` for an absent task,
-      // an unanswered tool call, a conversation with no title; `undefined` does
+      // `null` is the wire format. The backend sends `null` for a transfer not
+      // yet sent, a task with no error, a one-off outside any run; `undefined` does
       // not survive JSON. Swapping them would make the TypeScript types stop
       // describing what actually arrives.
       'unicorn/no-null': 'off',
@@ -198,8 +186,8 @@ export default tseslint.config(
       // ---- unicorn: configured rather than disabled ----------------------
 
       // Enforces the AGENTS.md naming rule instead of unicorn's kebab-case
-      // default: `Bubble.tsx` for a component, `useConversationStream.ts` for
-      // a hook, `turns.ts` for a module.
+      // default: `RunList.tsx` for a component, `useLiveUpdates.ts` for a
+      // hook, `money.ts` for a module.
       'unicorn/filename-case': ['error', { cases: { camelCase: true, pascalCase: true } }],
 
       // `caught`, not `error` — there is already an `error` in scope in the
