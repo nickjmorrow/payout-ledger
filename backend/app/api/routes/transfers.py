@@ -15,17 +15,8 @@ from fastapi import APIRouter, Header, HTTPException, Response, status
 from app.api.deps import CurrentUser, DbSession
 from app.api.idempotent import claim_or_replay
 from app.api.middleware import current_request_id
-from app.api.schemas import (
-    ApiResponse,
-    JournalOut,
-    LineOut,
-    TaskOut,
-    TransferDetailOut,
-    TransferIn,
-    TransferOut,
-)
+from app.api.schemas import ApiResponse, TransferDetailOut, TransferIn, TransferOut
 from app.logging import get_logger
-from app.models import Transfer
 from app.services import idempotency_service, ledger_service, task_service, transfer_service
 
 logger = get_logger(__name__)
@@ -33,22 +24,6 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/transfers", tags=["transfers"])
 
 ENDPOINT = "POST /transfers"
-
-
-def _out(transfer: Transfer) -> TransferOut:
-    return TransferOut(
-        id=transfer.id,
-        recipient_id=transfer.recipient_id,
-        recipient_name=transfer.recipient.full_name,
-        amount_minor=transfer.amount_minor,
-        currency=transfer.currency,
-        status=transfer.status,  # pyright: ignore[reportArgumentType]
-        provider_reference=transfer.provider_reference,
-        failure_reason=transfer.failure_reason,
-        run_id=transfer.run_id,
-        created_at=transfer.created_at,
-        updated_at=transfer.updated_at,
-    )
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -103,8 +78,7 @@ async def create(
         # money, which is not what happened. The programme fund is short.
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
-    await session.refresh(transfer, ["recipient"])
-    out = _out(transfer)
+    out = TransferOut.from_transfer(transfer)
 
     await idempotency_service.record_response(
         session,
@@ -125,9 +99,7 @@ async def list_transfers(
 ) -> ApiResponse[list[TransferOut]]:
     """The newest transfers; `?run_id=` for the ones in one payment run."""
     transfers = await transfer_service.recent(session, run_id=run_id)
-    for transfer in transfers:
-        await session.refresh(transfer, ["recipient"])
-    return ApiResponse(data=[_out(t) for t in transfers])
+    return ApiResponse(data=[TransferOut.from_transfer(t) for t in transfers])
 
 
 @router.get("/{transfer_id}")
@@ -144,34 +116,7 @@ async def get_transfer(
     transfer = await transfer_service.get(session, transfer_id=transfer_id)
     if transfer is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such transfer.")
-    await session.refresh(transfer, ["recipient"])
 
     journals = await ledger_service.journals_for_transfer(session, transfer_id=transfer_id)
     tasks = await task_service.for_transfer(session, transfer_id=transfer_id)
-
-    return ApiResponse(
-        data=TransferDetailOut(
-            **_out(transfer).model_dump(),
-            journals=[
-                JournalOut(
-                    id=journal.id,
-                    kind=journal.kind,
-                    memo=journal.memo,
-                    created_at=journal.created_at,
-                    lines=[
-                        LineOut(
-                            account_id=line.account_id,
-                            account_kind=line.account.kind,
-                            account_name=line.account.name,
-                            direction=line.direction,  # pyright: ignore[reportArgumentType]
-                            amount_minor=line.amount_minor,
-                            currency=line.currency,
-                        )
-                        for line in journal.lines
-                    ],
-                )
-                for journal in journals
-            ],
-            tasks=[TaskOut.from_task(task) for task in tasks],
-        )
-    )
+    return ApiResponse(data=TransferDetailOut.from_parts(transfer, journals, tasks))

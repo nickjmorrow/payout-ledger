@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-Status = Literal["succeeded", "failed", "interrupted"]
+Status = Literal["succeeded", "failed"]
 
 
 @dataclass(frozen=True)
@@ -136,14 +136,9 @@ async def execute(task: Task) -> None:
         # until a test made one raise. The row is known to exist, just above.
         await session.refresh(task)
 
-        # Shutting down: hand the work back rather than settle it. Nothing about
-        # this task failed, and the next worker to claim it starts again.
-        if outcome.status == "interrupted":
-            await task_service.release(session, task=task)
-
         # Worth another go, and attempts left. `attempts` was incremented by the
         # claim, so it already counts this one.
-        elif outcome.status == "failed" and outcome.retryable and task.attempts < task.max_attempts:
+        if outcome.status == "failed" and outcome.retryable and task.attempts < task.max_attempts:
             await task_service.retry_later(
                 session,
                 task=task,

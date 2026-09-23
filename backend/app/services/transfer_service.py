@@ -27,6 +27,7 @@ import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.bus import announce
 from app.logging import get_logger
@@ -100,6 +101,7 @@ async def initiate(
     )
 
     transfer = Transfer(
+        recipient=recipient,
         recipient_id=recipient_id,
         amount_minor=amount_minor,
         currency=currency,
@@ -221,14 +223,24 @@ async def mark_failed(session: AsyncSession, *, transfer: Transfer, reason: str)
 
 
 async def get(session: AsyncSession, *, transfer_id: uuid.UUID) -> Transfer | None:
-    return await session.get(Transfer, transfer_id)
+    """One transfer with its recipient, loaded in the same round trip."""
+    result = await session.execute(
+        select(Transfer).options(selectinload(Transfer.recipient)).where(Transfer.id == transfer_id)
+    )
+    return result.scalar_one_or_none()
 
 
 async def recent(
     session: AsyncSession, *, limit: int = 50, run_id: uuid.UUID | None = None
 ) -> list[Transfer]:
     """The newest transfers, or the newest in one run."""
-    query = select(Transfer).order_by(Transfer.created_at.desc()).limit(limit)
+    # Recipients in one extra query for the page, not one per row.
+    query = (
+        select(Transfer)
+        .options(selectinload(Transfer.recipient))
+        .order_by(Transfer.created_at.desc())
+        .limit(limit)
+    )
     if run_id is not None:
         query = query.where(Transfer.run_id == run_id)
     result = await session.execute(query)

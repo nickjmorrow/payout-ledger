@@ -41,7 +41,6 @@ async def overview(session: DbSession, _user: CurrentUser) -> ApiResponse[Overvi
     for a ledger reads as the books not adding up.
     """
     accounts = await _system_accounts(session)
-    findings = await reconciliation_service.recent_findings(session)
     queue = await task_service.counts(session)
 
     return ApiResponse(
@@ -51,7 +50,7 @@ async def overview(session: DbSession, _user: CurrentUser) -> ApiResponse[Overvi
             # than buried in a test, because a non-zero value means a trigger
             # has gone missing and the only way anyone finds out is by looking.
             trial_balance_minor=await ledger_service.trial_balance(session),
-            unresolved_findings=sum(1 for f in findings if not f.healed),
+            unresolved_findings=await reconciliation_service.currently_reported(session),
             # A count, not the length of the dead-letter listing, which is
             # capped: past fifty it would quietly stop going up.
             dead_lettered=queue.dead,

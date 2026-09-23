@@ -34,10 +34,6 @@ logger = get_logger(__name__)
 # move after waking is to ask the database anyway.
 WAKE_CHANNEL = "tasks_new"
 
-# A task is terminal when nothing will move it again. The streaming endpoint
-# uses this to decide when to hang up.
-TERMINAL_STATUSES = frozenset({"succeeded", "failed", "cancelled"})
-
 _CLAIM = text(
     """
     with claimed as (
@@ -70,14 +66,6 @@ _SWEEP = text(
      where status = 'running'
        and claimed_at < now() - make_interval(secs => :stale_seconds)
     returning id, payload ->> 'transfer_id' as transfer_id
-    """
-)
-
-_RELEASE = text(
-    """
-    update tasks
-       set status = 'pending', claimed_at = null, claimed_by = null, updated_at = now()
-     where id = :task_id
     """
 )
 
@@ -188,24 +176,6 @@ async def finish(
     logger.info("task finished", task_id=str(task.id), status=status)
 
 
-async def release(session: AsyncSession, *, task: Task) -> None:
-    """Put a claimed task back on the queue, unchanged.
-
-    For a worker shutting down cleanly: it did not fail, it just will not be
-    the one to finish it. Another worker picks it up on its next claim, which
-    is seconds — rather than the `task_stale_seconds` the sweeper would take to
-    reach the same conclusion about a worker that vanished without saying so.
-
-    `attempts` is deliberately NOT decremented. A task that keeps being handed
-    around deserves to hit `max_attempts` eventually; that is the difference
-    between an unlucky task and one that kills whatever picks it up.
-    """
-    await session.execute(_RELEASE, {"task_id": task.id})
-    await _announce(session, task_id=task.id, transfer_id=task.payload.get("transfer_id"))
-    await session.commit()
-    logger.info("task released", task_id=str(task.id), attempts=task.attempts)
-
-
 async def retry_later(
     session: AsyncSession, *, task: Task, error: str, delay_seconds: float
 ) -> None:
@@ -246,25 +216,6 @@ def retry_delay_seconds(attempts: int) -> float:
     )
 
 
-async def cancel_requested(session: AsyncSession, *, task_id: uuid.UUID) -> bool:
-    """Should this task stop early?
-
-    Cooperative, because the worker is a different process and cannot be
-    interrupted from outside. A long-running handler checks this between units
-    of work, so a stop takes effect within one unit rather than instantly.
-
-    A row that has vanished counts as cancelled. There is nothing left to
-    settle and nobody to report to, so carrying on can only write orphans.
-    """
-    result = await session.execute(
-        select(Task.cancel_requested, Task.status).where(Task.id == task_id)
-    )
-    row = result.first()
-    if row is None:
-        return True
-    return bool(row.cancel_requested) or row.status in TERMINAL_STATUSES
-
-
 async def get_task(session: AsyncSession, *, task_id: uuid.UUID) -> Task | None:
     return await session.get(Task, task_id)
 
@@ -282,17 +233,6 @@ async def task_exists(session: AsyncSession, *, task_id: uuid.UUID) -> bool:
     """
     result = await session.execute(select(exists().where(Task.id == task_id)))
     return bool(result.scalar())
-
-
-async def request_cancel(session: AsyncSession, *, task: Task) -> None:
-    task.cancel_requested = True
-    # A task that has not started can be settled immediately; there is no worker
-    # to cooperate with yet.
-    if task.status == "pending":
-        task.status = "cancelled"
-    await _announce(session, task_id=task.id, transfer_id=task.payload.get("transfer_id"))
-    await session.commit()
-    logger.info("task cancel requested", task_id=str(task.id), status=task.status)
 
 
 async def sweep_stale(session: AsyncSession, *, stale_seconds: int | None = None) -> int:

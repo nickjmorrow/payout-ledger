@@ -50,15 +50,6 @@ EVENTS_CHANNEL = "ledger_events"
 SUBSCRIBER_QUEUE_SIZE = 512
 
 
-def channel_for(prefix: str, subject_id: UUID) -> str:
-    """A channel name for live updates about one row.
-
-    Postgres channel names are identifiers, so no dashes and 63 characters max
-    — which is why the uuid goes in as `.hex` rather than `str()`.
-    """
-    return f"{prefix}_{subject_id.hex}"
-
-
 class Bus:
     """One LISTEN connection per process, fanned out in memory.
 

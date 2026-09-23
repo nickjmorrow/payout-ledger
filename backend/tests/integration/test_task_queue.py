@@ -1,4 +1,4 @@
-"""The queue: claiming, scheduling, cancelling, sweeping.
+"""The queue: claiming, scheduling, sweeping, retrying.
 
 These need a real Postgres. `for update skip locked` has no meaning without
 concurrent transactions, and it is the property the whole worker design rests
@@ -8,7 +8,6 @@ double payment, so this is the test to keep honest above all the others.
 """
 
 import asyncio
-import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -105,33 +104,16 @@ def test_retry_backoff_doubles_and_caps(attempts: int, expected: float):
     assert task_service.retry_delay_seconds(attempts) == expected
 
 
-async def test_release_returns_a_claimed_task_without_counting_it_as_failed(session):
-    task = await task_service.enqueue(session, kind="noop")
-    await session.commit()
-    claimed = await task_service.claim_next(session, worker_id="w1")
-    assert claimed is not None
-    assert claimed.attempts == 1
-
-    await task_service.release(session, task=claimed)
-    await session.refresh(task)
-    assert task.status == "pending"
-    assert task.claimed_by is None
-    # Not decremented: a task handed around forever should still run out.
-    assert task.attempts == 1
-
-
 async def test_enqueue_defaults_come_from_the_database_not_just_the_orm(session):
     """Raw inserts must work too — task_service's own SQL does not go via the ORM."""
     await session.execute(text("insert into tasks (kind) values ('noop')"))
     await session.commit()
     row = (
-        await session.execute(
-            text("select status, attempts, max_attempts, cancel_requested, payload from tasks")
-        )
+        await session.execute(text("select status, attempts, max_attempts, payload from tasks"))
     ).first()
     assert row is not None
     assert row.status == "pending"
-    assert (row.attempts, row.max_attempts, row.cancel_requested) == (0, 3, False)
+    assert (row.attempts, row.max_attempts) == (0, 3)
     assert row.payload == {}
 
 
@@ -149,33 +131,6 @@ async def test_check_constraints_are_enforced_by_the_database(session):
     with pytest.raises(Exception, match="tasks_status_check"):
         await session.execute(text("insert into tasks (kind, status) values ('noop', 'nonsense')"))
     await session.rollback()
-
-
-async def test_cancel_requested_is_visible_to_the_process_running_the_task(session):
-    """Cancellation is cooperative, so it has to travel through the database.
-
-    The worker is a different process and cannot be interrupted; all a stop can
-    do is set a flag that the handler reads between units of work. A row that
-    has vanished counts as cancelled too — there is nothing left to settle, and
-    carrying on can only write orphans.
-    """
-    task = await task_service.enqueue(session, kind="noop")
-    task.status = "running"
-    await session.commit()
-    assert await task_service.cancel_requested(session, task_id=task.id) is False
-
-    await task_service.request_cancel(session, task=task)
-    assert await task_service.cancel_requested(session, task_id=task.id) is True
-
-    assert await task_service.cancel_requested(session, task_id=uuid.uuid4()) is True
-
-
-async def test_a_pending_task_is_cancelled_outright(session):
-    """Nothing has claimed it, so there is no worker to cooperate with."""
-    task = await task_service.enqueue(session, kind="noop")
-    await task_service.request_cancel(session, task=task)
-    assert task.status == "cancelled"
-    assert await task_service.claim_next(session, worker_id="w") is None
 
 
 async def test_enqueue_joins_the_caller_transaction_rather_than_ending_it(session):

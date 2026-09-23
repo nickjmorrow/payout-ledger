@@ -272,9 +272,8 @@ def test_nothing_outside_the_provider_package_imports_the_mock():
 #
 # AGENTS.md > The worker: "A task kind is a registration in `HANDLERS`, not a
 # branch in `execute`." The settle path is the part that is hard to get right,
-# and a kind that reaches it by its own route is a kind that does not retry,
-# does not release on shutdown, and does not survive a row deleted underneath
-# it.
+# and a kind that reaches it by its own route is a kind that does not retry
+# with backoff and does not survive a row deleted underneath it.
 
 
 def test_task_kinds_are_dispatched_only_through_the_registry():

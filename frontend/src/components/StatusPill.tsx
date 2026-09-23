@@ -10,11 +10,9 @@ interface Props {
  * `processing` and `running` read as pending and not as success, deliberately:
  * the money has been promised and has not arrived, and showing that in the
  * same colour as `succeeded` would tell an operator the payment landed when it
- * has not. `cancelled` is muted rather than red — nothing went wrong, somebody
- * decided.
+ * has not.
  */
 const TONE: Record<TaskStatus | TransferStatus, string> = {
-  cancelled: 'bg-ink/10 text-ink-muted',
   failed: 'bg-danger/10 text-danger',
   pending: 'bg-ink/10 text-ink-muted',
   processing: 'bg-pending/15 text-pending',

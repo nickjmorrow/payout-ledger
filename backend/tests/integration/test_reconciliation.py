@@ -12,6 +12,7 @@ disagreement.
 """
 
 import asyncio
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -410,3 +411,41 @@ async def test_duplicate_chains_converge(session, funded):
     await execute(await _claim(session))
 
     assert await task_service.pending_count(session, kind=reconcile.RECONCILE) == 1
+
+
+# -------------------------------------------------------- what needs a person
+
+
+async def test_a_persisting_problem_counts_once_and_a_resolved_one_not_at_all(session, funded):
+    """ "Needs attention" counts problems, not the rows each pass writes about them."""
+    _, _, recipient = funded
+    transfer = await _transfer(session, recipient)
+
+    def finding(
+        kind, *, ago, healed=False, transfer_id: uuid.UUID | None = transfer.id, reference=None
+    ):
+        return ReconciliationFinding(
+            kind=kind,
+            transfer_id=transfer_id,
+            provider_reference=reference,
+            detail="test",
+            healed=healed,
+            created_at=datetime.now(UTC) - timedelta(seconds=ago),
+        )
+
+    session.add_all(
+        [
+            # One problem, reported by the last two passes: counts once.
+            finding("missing_at_provider", ago=5),
+            finding("missing_at_provider", ago=35),
+            # A payment nobody owns, keyed by the provider's reference: counts.
+            finding("unknown_to_us", ago=5, transfer_id=None, reference="MMORPHAN"),
+            # Healed: nothing for a person to do.
+            finding("status_behind", ago=5, healed=True),
+            # Last reported an hour ago and not since: resolved, by absence.
+            finding("amount_mismatch", ago=3600),
+        ]
+    )
+    await session.commit()
+
+    assert await reconciliation_service.currently_reported(session) == 2

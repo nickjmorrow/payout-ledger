@@ -18,8 +18,9 @@ from uuid import UUID
 from pydantic import BaseModel, Field, model_validator
 
 from app.config import settings
-from app.models import Task
+from app.models import JournalEntry, LedgerEntry, Task, Transfer
 from app.money import format_money
+from app.services.run_service import RunSummary
 from app.wire import ApiSchema
 
 
@@ -38,7 +39,7 @@ class ApiResponse[T](BaseModel):
 class TaskOut(ApiSchema):
     id: UUID
     kind: str
-    status: Literal["pending", "running", "succeeded", "failed", "cancelled"]
+    status: Literal["pending", "running", "succeeded", "failed"]
     attempts: int
     max_attempts: int
     run_at: datetime
@@ -91,6 +92,22 @@ class TransferOut(ApiSchema):
     created_at: datetime
     updated_at: datetime
 
+    @classmethod
+    def from_transfer(cls, transfer: Transfer) -> "TransferOut":
+        return cls(
+            id=transfer.id,
+            recipient_id=transfer.recipient_id,
+            recipient_name=transfer.recipient.full_name,
+            amount_minor=transfer.amount_minor,
+            currency=transfer.currency,
+            status=transfer.status,  # pyright: ignore[reportArgumentType]
+            provider_reference=transfer.provider_reference,
+            failure_reason=transfer.failure_reason,
+            run_id=transfer.run_id,
+            created_at=transfer.created_at,
+            updated_at=transfer.updated_at,
+        )
+
 
 class RunOut(ApiSchema):
     """A payment run and its progress, counted from its transfers when asked."""
@@ -104,6 +121,18 @@ class RunOut(ApiSchema):
     # Transfer status -> how many of this run's transfers are in it.
     by_status: dict[str, int]
 
+    @classmethod
+    def from_summary(cls, summary: RunSummary) -> "RunOut":
+        return cls(
+            id=summary.run.id,
+            memo=summary.run.memo,
+            currency=summary.run.currency,
+            created_at=summary.run.created_at,
+            count=summary.count,
+            total_minor=summary.total_minor,
+            by_status=summary.by_status,
+        )
+
 
 class LineOut(ApiSchema):
     """One side of a posting. `amount_minor` is positive; `direction` is the sign."""
@@ -114,6 +143,17 @@ class LineOut(ApiSchema):
     direction: Literal["debit", "credit"]
     amount_minor: int
     currency: str
+
+    @classmethod
+    def from_line(cls, line: LedgerEntry) -> "LineOut":
+        return cls(
+            account_id=line.account_id,
+            account_kind=line.account.kind,
+            account_name=line.account.name,
+            direction=line.direction,  # pyright: ignore[reportArgumentType]
+            amount_minor=line.amount_minor,
+            currency=line.currency,
+        )
 
 
 class JournalOut(ApiSchema):
@@ -131,6 +171,16 @@ class JournalOut(ApiSchema):
     created_at: datetime
     lines: list[LineOut]
 
+    @classmethod
+    def from_journal(cls, journal: JournalEntry) -> "JournalOut":
+        return cls(
+            id=journal.id,
+            kind=journal.kind,
+            memo=journal.memo,
+            created_at=journal.created_at,
+            lines=[LineOut.from_line(line) for line in journal.lines],
+        )
+
 
 class TransferDetailOut(TransferOut):
     """A transfer with its two histories: what the books say, and what the worker did.
@@ -143,6 +193,16 @@ class TransferDetailOut(TransferOut):
 
     journals: list[JournalOut]
     tasks: list[TaskOut]
+
+    @classmethod
+    def from_parts(
+        cls, transfer: Transfer, journals: list[JournalEntry], tasks: list[Task]
+    ) -> "TransferDetailOut":
+        return cls(
+            **TransferOut.from_transfer(transfer).model_dump(),
+            journals=[JournalOut.from_journal(journal) for journal in journals],
+            tasks=[TaskOut.from_task(task) for task in tasks],
+        )
 
 
 class AccountOut(ApiSchema):
@@ -160,9 +220,6 @@ class RecipientOut(ApiSchema):
     msisdn: str
     country: str
     enrolled_at: datetime
-
-
-# ---------------------------------------------------------------- requests
 
 
 class FindingOut(ApiSchema):
@@ -183,6 +240,9 @@ class OverviewOut(ApiSchema):
     trial_balance_minor: int
     unresolved_findings: int
     dead_lettered: int
+
+
+# ---------------------------------------------------------------- requests
 
 
 def _within_cap(amount_minor: int, currency: str) -> None:

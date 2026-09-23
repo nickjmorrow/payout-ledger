@@ -49,7 +49,7 @@ export interface RunRequest {
   memo: null | string;
 }
 
-export type TaskStatus = 'cancelled' | 'failed' | 'pending' | 'running' | 'succeeded';
+export type TaskStatus = 'failed' | 'pending' | 'running' | 'succeeded';
 
 export interface Task {
   attempts: number;

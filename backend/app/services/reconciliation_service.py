@@ -40,10 +40,11 @@ other, a person decides.
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import Text, cast, distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bus import announce
+from app.config import settings
 from app.logging import get_logger
 from app.models import ReconciliationFinding, Transfer
 from app.provider.base import PaymentProvider, ProviderPaymentView
@@ -276,3 +277,32 @@ async def recent_findings(session: AsyncSession, *, limit: int = 50) -> list[Rec
         select(ReconciliationFinding).order_by(ReconciliationFinding.created_at.desc()).limit(limit)
     )
     return list(result.scalars())
+
+
+async def currently_reported(session: AsyncSession) -> int:
+    """How many distinct problems reconciliation is still reporting.
+
+    Not a count of rows: a problem that persists is reported again by every
+    pass, so the same one would count once per pass, forever. Counted instead
+    are distinct unhealed problems -- a kind of disagreement and the payment it
+    is about -- seen within the last two passes. When a pass stops reporting
+    one, it leaves the count, which is how "the absence is the record of the
+    resolution" reads on the console.
+    """
+    window = timedelta(seconds=2 * settings.reconcile_interval_seconds)
+    problem = func.concat(
+        ReconciliationFinding.kind,
+        ":",
+        func.coalesce(
+            cast(ReconciliationFinding.transfer_id, Text),
+            ReconciliationFinding.provider_reference,
+            "",
+        ),
+    )
+    result = await session.execute(
+        select(func.count(distinct(problem))).where(
+            ReconciliationFinding.healed.is_(False),
+            ReconciliationFinding.created_at >= func.now() - window,
+        )
+    )
+    return int(result.scalar_one())

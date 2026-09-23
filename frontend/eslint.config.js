@@ -202,16 +202,9 @@ export default tseslint.config(
     plugins: { react, 'react-refresh': reactRefresh },
     settings: { react: { version: '19.0' } },
     rules: {
-      // `<Bubble role={'assistant'}>` is the chat domain's `role` — the same
-      // one the backend puts on a message — not an ARIA role. Checking real
-      // DOM elements only is what this option is for; `role="alert"` on the
-      // error banner is still verified.
-      'jsx-a11y/aria-role': ['error', { ignoreNonDOM: true }],
-
-      // The other half of "never enable raw HTML". Banning the import is not
-      // enough on its own: `dangerouslySetInnerHTML` needs no dependency, and
-      // the one place model output becomes DOM is exactly where someone would
-      // reach for it to fix a rendering edge case.
+      // Nothing here renders HTML from a string, and nothing should start:
+      // recipient names and memos are operator input, and innerHTML is how
+      // that becomes script.
       'react/no-danger': 'error',
 
       // "One component per file, default export, named to match the file."

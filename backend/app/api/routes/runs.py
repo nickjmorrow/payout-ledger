@@ -15,23 +15,11 @@ from app.api.idempotent import claim_or_replay
 from app.api.middleware import current_request_id
 from app.api.schemas import ApiResponse, RunIn, RunOut
 from app.services import idempotency_service, run_service, transfer_service
-from app.services.run_service import RunItem, RunSummary
+from app.services.run_service import RunItem
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
 ENDPOINT = "POST /runs"
-
-
-def _out(summary: RunSummary) -> RunOut:
-    return RunOut(
-        id=summary.run.id,
-        memo=summary.run.memo,
-        currency=summary.run.currency,
-        created_at=summary.run.created_at,
-        count=summary.count,
-        total_minor=summary.total_minor,
-        by_status=summary.by_status,
-    )
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -78,7 +66,7 @@ async def create(
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR, "The run was not found after it was created."
         )
-    out = _out(summary)
+    out = RunOut.from_summary(summary)
 
     await idempotency_service.record_response(
         session,
@@ -95,4 +83,4 @@ async def create(
 
 @router.get("")
 async def list_runs(session: DbSession, _user: CurrentUser) -> ApiResponse[list[RunOut]]:
-    return ApiResponse(data=[_out(s) for s in await run_service.recent(session)])
+    return ApiResponse(data=[RunOut.from_summary(s) for s in await run_service.recent(session)])
