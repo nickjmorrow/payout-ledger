@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import LoadFailed from 'src/components/LoadFailed';
+import Loading from 'src/components/Loading';
+import Skeleton from 'src/components/Skeleton';
 import StatusPill from 'src/components/StatusPill';
 import TransferDetail from 'src/components/TransferDetail';
 import { formatTime } from 'src/format';
@@ -21,17 +24,34 @@ interface Props {
  * would open a drawer instead. One real button per row costs nothing.
  */
 export default function TransferList({ onClearRun, runId }: Props) {
-  const { data: transfers } = useTransfers(runId);
+  const { data: transfers, error, isPending } = useTransfers(runId);
   const [selectedId, setSelectedId] = useState<null | string>(null);
 
-  if (transfers?.length === 0 && runId === null) {
+  if (isPending) {
+    return (
+      <Loading label={'Loading disbursements'}>
+        <div className={'flex flex-col gap-3 rounded-xl border border-ink/10 px-4 py-3'}>
+          <Skeleton className={'h-3 w-1/3'} />
+          {Array.from({ length: 5 }, (_, row) => (
+            <Skeleton className={'h-5 w-full'} key={row} />
+          ))}
+        </div>
+      </Loading>
+    );
+  }
+
+  if (transfers === undefined) {
+    return <LoadFailed error={error} what={'disbursements'} />;
+  }
+
+  if (transfers.length === 0 && runId === null) {
     return (
       <p
         className={
           'rounded-xl border border-dashed border-ink/15 px-4 py-8 text-center text-sm text-ink-muted'
         }
       >
-        {'No disbursements yet. Authorise one above and watch it settle.'}
+        {'No disbursements yet. Authorize one above and watch it settle.'}
       </p>
     );
   }
@@ -44,7 +64,7 @@ export default function TransferList({ onClearRun, runId }: Props) {
             'flex items-center justify-between border-b border-ink/5 bg-surface-raised px-4 py-2 text-xs text-ink-muted'
           }
         >
-          <span>{`Showing one payment run · ${String(transfers?.length ?? 0)} transfers`}</span>
+          <span>{`Showing one payment run · ${String(transfers.length)} transfers`}</span>
           <button
             className={'font-medium text-accent hover:underline'}
             onClick={onClearRun}
@@ -65,7 +85,7 @@ export default function TransferList({ onClearRun, runId }: Props) {
           </tr>
         </thead>
         <tbody>
-          {(transfers ?? []).map((transfer) => (
+          {transfers.map((transfer) => (
             <tr
               className={[
                 'border-t border-ink/5',

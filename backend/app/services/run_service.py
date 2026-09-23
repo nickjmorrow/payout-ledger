@@ -101,7 +101,7 @@ async def initiate(
     if available < total:
         raise transfer_service.InsufficientFundsError(
             f"this run totals {total} {currency} minor units across {len(items)} recipients; "
-            f"the programme fund holds {available}"
+            f"the program fund holds {available}"
         )
 
     run = PaymentRun(memo=memo, currency=currency)

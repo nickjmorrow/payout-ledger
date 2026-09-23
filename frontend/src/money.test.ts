@@ -8,8 +8,14 @@ describe('formatMinor', () => {
     expect(formatMinor(0)).toBe('0.00');
   });
 
-  it('formats a whole programme balance', () => {
-    expect(formatMoney(200_000_000, 'KES')).toBe('KES 2,000,000.00');
+  it('formats a whole program balance as dollars', () => {
+    expect(formatMoney(100_000_000, 'USD')).toBe('$1,000,000.00');
+    expect(formatMoney(50_000, 'USD')).toBe('$500.00');
+  });
+
+  it('names any other currency by its code rather than guessing a symbol', () => {
+    // Intl separates the code from the number with a no-break space.
+    expect(formatMoney(250_000, 'KES')).toBe('KES\u{A0}2,500.00');
   });
 });
 

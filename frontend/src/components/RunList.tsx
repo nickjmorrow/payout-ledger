@@ -1,4 +1,7 @@
+import LoadFailed from 'src/components/LoadFailed';
+import Loading from 'src/components/Loading';
 import RunProgress from 'src/components/RunProgress';
+import Skeleton from 'src/components/Skeleton';
 import { formatTime } from 'src/format';
 import useRuns from 'src/hooks/useRuns';
 import { formatMoney } from 'src/money';
@@ -17,9 +20,25 @@ interface Props {
  * payments.
  */
 export default function RunList({ onSelect, selectedId }: Props) {
-  const { data: runs } = useRuns();
+  const { data: runs, error, isPending } = useRuns();
 
-  if (runs === undefined || runs.length === 0) {
+  if (isPending) {
+    return (
+      <Loading label={'Loading payment runs'}>
+        <div className={'flex flex-col gap-2 rounded-lg border border-ink/10 px-4 py-3'}>
+          <Skeleton className={'h-4 w-1/3'} />
+          <Skeleton className={'h-1.5 w-full rounded-full'} />
+          <Skeleton className={'h-3 w-1/4'} />
+        </div>
+      </Loading>
+    );
+  }
+
+  if (runs === undefined) {
+    return <LoadFailed error={error} what={'payment runs'} />;
+  }
+
+  if (runs.length === 0) {
     return (
       <p className={'text-sm text-ink-muted'}>
         {'No payment runs yet. Choose "Payment run" above to pay several people at once.'}

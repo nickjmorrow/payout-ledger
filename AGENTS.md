@@ -18,7 +18,7 @@ part honest.
 ## What this is
 
 A disbursement service for unconditional cash transfers: a programme sends
-money to recipients through a mobile-money provider, and the books stay correct
+money to recipients through a payment provider, and the books stay correct
 while that happens.
 
 The domain is small on purpose. What is not small is the set of failures it has
@@ -138,7 +138,7 @@ without the books ever showing a payment that did not occur.
 | `failed` | It will not happen. | `transfer_reversed` |
 
 **Authorising debits the fund before the money moves.** That is the conservative
-direction: the programme must not be able to promise the same shilling twice
+direction: the programme must not be able to promise the same dollar twice
 while a payment is in flight. It comes back on reversal.
 
 ### Concurrency: the failure no constraint catches
@@ -585,7 +585,9 @@ carries the sign, so a query can sum debits and credits separately without a
 CASE.
 
 The browser converts only at the edges (`money.ts`) and the value on the wire is
-always the integer.
+always the integer. It displays in one pinned locale, US English, rather than
+the reader's: the same balance reading `1.000.000,00` on one operator's screen
+and `1,000,000.00` on another's is how a figure gets read back wrong.
 
 ### Responses and errors
 
@@ -640,6 +642,13 @@ wrote down.
   literal Tailwind palette classes. For a fraction of a colour use `ink`
   (`border-ink/10`), which inverts with the theme where `black` and `white` do
   not.
+- **Loading, failed and empty are three different states**, and every panel
+  shows which. An empty message must mean empty: "Nothing to report" under
+  Reconciliation, or no dead letters, is reassurance, and it used to appear
+  while the request was still in flight — or had failed. Loading is a
+  skeleton the shape of what is coming (`Skeleton`, inside `Loading`, which
+  sets `aria-busy` and says what is loading in words); a failed read is
+  `LoadFailed`, which says so and that it is retrying.
 - **`processing` is coloured as pending, not as success.** The money has been
   promised and has not arrived; sharing a colour with `succeeded` would tell an
   operator the payment landed when it has not.

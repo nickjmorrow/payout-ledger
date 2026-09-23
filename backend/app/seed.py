@@ -34,14 +34,15 @@ from app.services.ledger_service import Posting
 
 logger = get_logger(__name__)
 
-CURRENCY = "KES"
+CURRENCY = "USD"
 
-# The opening balance the demo programme starts with: 2,000,000 KES.
-OPENING_BALANCE_MINOR = 2_000_000_00
+# The opening balance the demo program starts with: $1,000,000.
+OPENING_BALANCE_MINOR = 1_000_000_00
 
-# Names and numbers are obviously fictional. The +254 prefix is Kenya, matching
-# the KES currency, so the demo reads as one coherent programme rather than a
-# pile of unrelated test rows.
+# Names and numbers are obviously fictional. The numbers are in 555-0100
+# through 555-0199, the block reserved for fiction, so none of them can ring
+# anybody — and all are +1, matching the currency, so the demo reads as one
+# coherent program rather than a pile of unrelated test rows.
 #
 # Twenty-four rather than a handful so a payment run is a real batch: enough
 # transfers that the queue visibly works through them, and that two workers
@@ -49,38 +50,38 @@ OPENING_BALANCE_MINOR = 2_000_000_00
 # database seeded with fewer — the insert below is ON CONFLICT DO NOTHING on
 # the number, so the originals stay and only the new ones arrive.
 DEMO_RECIPIENTS = [
-    ("Asha Mwangi", "+254700000101"),
-    ("Brian Otieno", "+254700000102"),
-    ("Caroline Wanjiru", "+254700000103"),
-    ("David Kipchoge", "+254700000104"),
-    ("Esther Nyambura", "+254700000105"),
-    ("Francis Mutua", "+254700000106"),
-    ("Grace Akinyi", "+254700000107"),
-    ("Hassan Omar", "+254700000108"),
-    ("Irene Chebet", "+254700000109"),
-    ("James Kamau", "+254700000110"),
-    ("Khadija Abdi", "+254700000111"),
-    ("Lucy Njeri", "+254700000112"),
-    ("Moses Ochieng", "+254700000113"),
-    ("Naomi Jepkosgei", "+254700000114"),
-    ("Peter Mwangi", "+254700000115"),
-    ("Rose Atieno", "+254700000116"),
-    ("Samuel Kiprono", "+254700000117"),
-    ("Tabitha Wambui", "+254700000118"),
-    ("Victor Onyango", "+254700000119"),
-    ("Winnie Muthoni", "+254700000120"),
-    ("Yusuf Hassan", "+254700000121"),
-    ("Zipporah Nekesa", "+254700000122"),
-    ("Daniel Kiplagat", "+254700000123"),
-    ("Mercy Adhiambo", "+254700000124"),
+    ("Ava Johnson", "+12025550101"),
+    ("Brandon Lee", "+12025550102"),
+    ("Carmen Rodriguez", "+12025550103"),
+    ("Darnell Washington", "+12025550104"),
+    ("Emily Nguyen", "+12025550105"),
+    ("Frank Miller", "+12025550106"),
+    ("Gabriela Torres", "+12025550107"),
+    ("Henry Davis", "+12025550108"),
+    ("Isabella Martinez", "+12025550109"),
+    ("Jamal Carter", "+12025550110"),
+    ("Katie O'Brien", "+12025550111"),
+    ("Luis Hernandez", "+12025550112"),
+    ("Maya Patel", "+12025550113"),
+    ("Nathan Brooks", "+12025550114"),
+    ("Olivia Kim", "+12025550115"),
+    ("Paul Anderson", "+12025550116"),
+    ("Rosa Jimenez", "+12025550117"),
+    ("Samuel Wright", "+12025550118"),
+    ("Tanya Robinson", "+12025550119"),
+    ("Victor Chen", "+12025550120"),
+    ("Whitney Scott", "+12025550121"),
+    ("Xavier Price", "+12025550122"),
+    ("Yolanda Bell", "+12025550123"),
+    ("Zachary Cooper", "+12025550124"),
 ]
 
 
 async def seed_chart_of_accounts(session: AsyncSession) -> None:
     """The accounts every transfer needs. Required, not optional."""
     for kind, name in (
-        ("program_funding", "Unconditional cash transfer programme"),
-        ("provider_settlement", "Mobile money float"),
+        ("program_funding", "Unconditional cash transfer program"),
+        ("provider_settlement", "Provider float"),
     ):
         await session.execute(
             pg_insert(Account)
@@ -101,7 +102,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
     for full_name, msisdn in DEMO_RECIPIENTS:
         await session.execute(
             pg_insert(Recipient)
-            .values(full_name=full_name, msisdn=msisdn, country="KE")
+            .values(full_name=full_name, msisdn=msisdn, country="US")
             .on_conflict_do_nothing(index_elements=["msisdn"])
         )
     await session.commit()

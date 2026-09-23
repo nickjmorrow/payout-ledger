@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { ledgerKeys, listRecipients } from 'src/api/ledger';
+import Skeleton from 'src/components/Skeleton';
 import useCreateRun from 'src/hooks/useCreateRun';
 import { formatMoney, parseMajor } from 'src/money';
 
-const CURRENCY = 'KES';
+const CURRENCY = 'USD';
 
 interface Props {
   /** Called with the new run's id, so the page can show its transfers. */
@@ -24,13 +25,17 @@ export default function RunForm({ onCreated }: Props) {
   const amountField = useId();
   const memoField = useId();
 
-  const { data: recipients } = useQuery({
+  const {
+    data: recipients,
+    isError,
+    isPending: isLoadingRecipients,
+  } = useQuery({
     queryFn: listRecipients,
     queryKey: ledgerKeys.recipients,
   });
 
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-  const [amount, setAmount] = useState('2500.00');
+  const [amount, setAmount] = useState('500.00');
   const [memo, setMemo] = useState('');
   const { error, isPending, submit } = useCreateRun((run) => {
     setSelected(new Set());
@@ -68,12 +73,19 @@ export default function RunForm({ onCreated }: Props) {
     >
       <fieldset className={'flex flex-col gap-2'}>
         <legend className={'flex w-full items-center justify-between text-xs text-ink-muted'}>
-          <span>{`Recipients · ${String(selected.size)} of ${String(everyone.length)}`}</span>
+          <span>
+            {isLoadingRecipients
+              ? 'Recipients · loading…'
+              : isError && recipients === undefined
+                ? 'Recipients · could not load — retrying'
+                : `Recipients · ${String(selected.size)} of ${String(everyone.length)}`}
+          </span>
         </legend>
         <label className={'flex items-center gap-2 text-sm text-ink'}>
           <input
             checked={isAllSelected}
             className={'accent-accent'}
+            disabled={everyone.length === 0}
             onChange={() => {
               setSelected(isAllSelected ? new Set() : new Set(everyone.map((r) => r.id)));
             }}
@@ -82,10 +94,15 @@ export default function RunForm({ onCreated }: Props) {
           {'Everyone enrolled'}
         </label>
         <div
+          aria-busy={isLoadingRecipients}
           className={
             'grid max-h-48 grid-cols-1 gap-x-4 gap-y-1 overflow-y-auto rounded-lg border border-ink/10 p-2 sm:grid-cols-2'
           }
         >
+          {isLoadingRecipients &&
+            Array.from({ length: 8 }, (_, row) => (
+              <Skeleton className={'my-1 h-4 w-3/4'} key={row} />
+            ))}
           {everyone.map((recipient) => (
             <label className={'flex items-center gap-2 text-sm text-ink'} key={recipient.id}>
               <input
@@ -151,7 +168,7 @@ export default function RunForm({ onCreated }: Props) {
           disabled={!canSubmit}
           type={'submit'}
         >
-          {isPending ? 'Authorising…' : `Authorise ${String(selected.size)} payments`}
+          {isPending ? 'Authorizing…' : `Authorize ${String(selected.size)} payments`}
         </button>
       </div>
 

@@ -1,4 +1,7 @@
 import DeadLetterRow from 'src/components/DeadLetterRow';
+import LoadFailed from 'src/components/LoadFailed';
+import Loading from 'src/components/Loading';
+import Skeleton from 'src/components/Skeleton';
 import useDeadLetters from 'src/hooks/useDeadLetters';
 
 /**
@@ -9,9 +12,23 @@ import useDeadLetters from 'src/hooks/useDeadLetters';
  * and a Retry for the cases where running it again can still help.
  */
 export default function DeadLetterList() {
-  const { data: tasks } = useDeadLetters();
+  const { data: tasks, error, isPending } = useDeadLetters();
 
-  if (tasks === undefined || tasks.length === 0) {
+  if (isPending) {
+    return (
+      <Loading label={'Loading dead letters'}>
+        <Skeleton className={'h-16 w-full rounded-lg'} />
+      </Loading>
+    );
+  }
+
+  // No data after loading is a failed read, not an empty queue: "nothing has
+  // run out of retries" is reassurance, and it has to be earned.
+  if (tasks === undefined) {
+    return <LoadFailed error={error} what={'dead letters'} />;
+  }
+
+  if (tasks.length === 0) {
     return <p className={'text-sm text-ink-muted'}>{'Nothing has run out of retries.'}</p>;
   }
 

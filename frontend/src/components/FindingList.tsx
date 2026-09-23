@@ -1,5 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { ledgerKeys, listFindings } from 'src/api/ledger';
+import LoadFailed from 'src/components/LoadFailed';
+import Loading from 'src/components/Loading';
+import Skeleton from 'src/components/Skeleton';
 import { formatTime } from 'src/format';
 import usePollInterval from 'src/hooks/usePollInterval';
 
@@ -13,13 +16,34 @@ import usePollInterval from 'src/hooks/usePollInterval';
  * still be there.
  */
 export default function FindingList() {
-  const { data: findings } = useQuery({
+  const {
+    data: findings,
+    error,
+    isPending,
+  } = useQuery({
     queryFn: listFindings,
     queryKey: ledgerKeys.findings,
     refetchInterval: usePollInterval(),
   });
 
-  if (findings === undefined || findings.length === 0) {
+  if (isPending) {
+    return (
+      <Loading label={'Loading reconciliation findings'}>
+        <div className={'flex flex-col gap-2'}>
+          <Skeleton className={'h-16 w-full rounded-lg'} />
+          <Skeleton className={'h-16 w-full rounded-lg'} />
+        </div>
+      </Loading>
+    );
+  }
+
+  // After the loading check, no data means the read failed. Saying "nothing
+  // to report" here would be good news the console has no grounds for.
+  if (findings === undefined) {
+    return <LoadFailed error={error} what={'reconciliation findings'} />;
+  }
+
+  if (findings.length === 0) {
     return (
       <p className={'text-sm text-ink-muted'}>
         {'Nothing to report — the books and the provider agree.'}

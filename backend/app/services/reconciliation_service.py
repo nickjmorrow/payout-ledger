@@ -229,7 +229,7 @@ async def _compare(
             reference=payment.reference,
             detail=(
                 "we reversed this transfer and returned the money to the fund, but the "
-                "provider says the recipient was paid. The programme has paid out money "
+                "provider says the recipient was paid. The program has paid out money "
                 "its books show as still available."
             ),
         )

@@ -135,7 +135,7 @@ async def test_a_dead_letter_for_a_reversed_payment_is_not_retried(client, sessi
     response = await client.post(f"/api/dead-letters/{task_id}/retry")
     assert response.status_code == 409
     assert "was reversed" in response.json()["detail"]
-    assert "authorise a new disbursement" in response.json()["detail"]
+    assert "authorize a new disbursement" in response.json()["detail"]
 
     still = await session.execute(text("select status from tasks where id = :id"), {"id": task_id})
     assert still.scalar_one() == "failed"

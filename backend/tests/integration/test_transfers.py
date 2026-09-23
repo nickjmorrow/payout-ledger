@@ -190,7 +190,7 @@ async def test_reusing_a_key_with_a_different_amount_is_refused(client, recipien
 async def test_a_transfer_larger_than_the_fund_is_refused(client, recipient):
     response = await _post(client, recipient.id, amount=FUND + 1)
     assert response.status_code == 422
-    assert "programme fund holds" in response.json()["detail"]
+    assert "program fund holds" in response.json()["detail"]
 
 
 @pytest.mark.usefixtures("chart")

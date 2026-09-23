@@ -349,7 +349,11 @@ async def test_seeding_twice_does_not_fund_the_programme_twice(session):
     await seed.seed_chart_of_accounts(session)
     await seed.seed_demo_data(session)
 
-    funding = await ledger_service.system_account(session, kind="program_funding", currency=KES)
+    # The seeder's own currency, not this file's: the test is about seeding,
+    # and must follow wherever the demo program is denominated.
+    funding = await ledger_service.system_account(
+        session, kind="program_funding", currency=seed.CURRENCY
+    )
     assert (
         await ledger_service.balance(session, account_id=funding.id) == seed.OPENING_BALANCE_MINOR
     )

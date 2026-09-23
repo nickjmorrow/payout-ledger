@@ -4,7 +4,7 @@ import { ledgerKeys, listRecipients } from 'src/api/ledger';
 import useDisburse from 'src/hooks/useDisburse';
 import { parseMajor } from 'src/money';
 
-const CURRENCY = 'KES';
+const CURRENCY = 'USD';
 
 /**
  * Authorise a payment to one recipient.
@@ -18,7 +18,11 @@ export default function DisburseForm() {
   const recipientField = useId();
   const amountField = useId();
 
-  const { data: recipients } = useQuery({
+  const {
+    data: recipients,
+    isError,
+    isPending: isLoadingRecipients,
+  } = useQuery({
     queryFn: listRecipients,
     queryKey: ledgerKeys.recipients,
   });
@@ -47,16 +51,26 @@ export default function DisburseForm() {
           {'Recipient'}
         </label>
         <select
+          aria-busy={isLoadingRecipients}
           className={
-            'mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink'
+            'mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink disabled:opacity-60'
           }
+          // Disabled until there is someone to choose: an empty list that looks
+          // ready invites a click that finds nothing.
+          disabled={recipients === undefined}
           id={recipientField}
           onChange={(event) => {
             setRecipientId(event.target.value);
           }}
           value={recipientId}
         >
-          <option value={''}>{'Choose someone…'}</option>
+          <option value={''}>
+            {isLoadingRecipients
+              ? 'Loading recipients…'
+              : isError
+                ? 'Could not load recipients — retrying'
+                : 'Choose someone…'}
+          </option>
           {(recipients ?? []).map((recipient) => (
             <option key={recipient.id} value={recipient.id}>
               {`${recipient.fullName} · ${recipient.msisdn}`}
@@ -78,7 +92,7 @@ export default function DisburseForm() {
           onChange={(event) => {
             setAmount(event.target.value);
           }}
-          placeholder={'2500.00'}
+          placeholder={'500.00'}
           value={amount}
         />
       </div>

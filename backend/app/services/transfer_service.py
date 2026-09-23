@@ -19,7 +19,7 @@ The states, and what each one means in the ledger:
 
 **Authorising debits the fund immediately, before the money moves.** That is
 deliberate and is the conservative direction: the programme should not be able
-to promise the same shilling twice while a payment is in flight. The money
+to promise the same dollar twice while a payment is in flight. The money
 comes back on reversal if the payment fails.
 """
 
@@ -90,7 +90,7 @@ async def initiate(
     available = await ledger_service.balance(session, account_id=funding.id)
     if available < amount_minor:
         raise InsufficientFundsError(
-            f"programme fund holds {available} {currency} minor units; {amount_minor} requested"
+            f"program fund holds {available} {currency} minor units; {amount_minor} requested"
         )
 
     payable = await ledger_service.payable_account(
@@ -112,7 +112,7 @@ async def initiate(
         kind="transfer_authorized",
         currency=currency,
         transfer_id=transfer.id,
-        memo=f"Authorised for {recipient.full_name}",
+        memo=f"Authorized for {recipient.full_name}",
         postings=[
             Posting(account_id=funding.id, direction="debit", amount_minor=amount_minor),
             Posting(account_id=payable.id, direction="credit", amount_minor=amount_minor),

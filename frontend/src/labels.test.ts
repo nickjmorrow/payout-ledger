@@ -3,7 +3,7 @@ import { accountLabel, journalLabel, taskLabel } from 'src/labels';
 
 describe('labels', () => {
   it('turns the schema vocabulary into words', () => {
-    expect(accountLabel('program_funding')).toBe('Programme fund');
+    expect(accountLabel('program_funding')).toBe('Program fund');
     expect(journalLabel('transfer_reversed')).toBe('Reversed');
     expect(taskLabel('settle_transfer')).toBe('Check settlement');
   });

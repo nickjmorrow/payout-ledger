@@ -67,7 +67,7 @@ async def retry(session: AsyncSession, *, task_id: uuid.UUID) -> Task:
             what = "was paid" if transfer.status == "succeeded" else "was reversed"
             raise AlreadyFinishedError(
                 f"the transfer this task was about {what}, so running it again would do "
-                "nothing. To pay this recipient, authorise a new disbursement."
+                "nothing. To pay this recipient, authorize a new disbursement."
             )
 
     await task_service.requeue(session, task=task)

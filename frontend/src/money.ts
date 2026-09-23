@@ -10,17 +10,25 @@
 
 const MINOR_PER_MAJOR = 100;
 
-/** `250000` -> `"2,500.00"`, without the currency. */
+/**
+ * US English, pinned rather than taken from the reader's browser. An amount is
+ * data here, not prose: the same balance showing as `1.000.000,00` on one
+ * operator's screen and `1,000,000.00` on another's is how a figure gets read
+ * back wrong over the phone.
+ */
+const LOCALE = 'en-US';
+
+/** `250000` -> `"2,500.00"`, without the currency. For columns under a heading that names it. */
 export function formatMinor(minor: number): string {
-  return (minor / MINOR_PER_MAJOR).toLocaleString(undefined, {
+  return (minor / MINOR_PER_MAJOR).toLocaleString(LOCALE, {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   });
 }
 
-/** `250000, 'KES'` -> `"KES 2,500.00"`. */
+/** `250000, 'USD'` -> `"$2,500.00"`. Any other currency is shown by its code. */
 export function formatMoney(minor: number, currency: string): string {
-  return `${currency} ${formatMinor(minor)}`;
+  return (minor / MINOR_PER_MAJOR).toLocaleString(LOCALE, { currency, style: 'currency' });
 }
 
 /**

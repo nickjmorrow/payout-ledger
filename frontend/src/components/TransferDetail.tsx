@@ -1,5 +1,8 @@
 import { useRef } from 'react';
 import JournalCard from 'src/components/JournalCard';
+import LoadFailed from 'src/components/LoadFailed';
+import Loading from 'src/components/Loading';
+import Skeleton from 'src/components/Skeleton';
 import StatusPill from 'src/components/StatusPill';
 import { formatClock } from 'src/format';
 import useDismiss from 'src/hooks/useDismiss';
@@ -29,7 +32,7 @@ interface Props {
 export default function TransferDetail({ id, onClose }: Props) {
   const ref = useRef<HTMLElement>(null);
   useDismiss(ref, true, onClose);
-  const { data: transfer, error } = useTransfer(id);
+  const { data: transfer, error, isPending } = useTransfer(id);
 
   return (
     <aside
@@ -63,11 +66,21 @@ export default function TransferDetail({ id, onClose }: Props) {
       </header>
 
       <div className={'flex flex-1 flex-col gap-6 overflow-y-auto px-4 py-4'}>
-        {error && (
-          <p className={'text-sm text-danger'} role={'alert'}>
-            {error.message}
-          </p>
+        {isPending && (
+          <Loading label={'Loading this transfer'}>
+            <div className={'flex flex-col gap-6'}>
+              <div className={'grid grid-cols-2 gap-x-4 gap-y-3'}>
+                {Array.from({ length: 10 }, (_, cell) => (
+                  <Skeleton className={'h-4 w-3/4'} key={cell} />
+                ))}
+              </div>
+              <Skeleton className={'h-20 w-full rounded-lg'} />
+              <Skeleton className={'h-40 w-full rounded-lg'} />
+            </div>
+          </Loading>
         )}
+
+        {error && !transfer && <LoadFailed error={error} what={'this transfer'} />}
 
         {transfer && (
           <>
@@ -87,7 +100,7 @@ export default function TransferDetail({ id, onClose }: Props) {
               </dd>
               <dt className={'text-xs text-ink-muted'}>{'Provider ref'}</dt>
               <dd className={'font-mono text-xs text-ink'}>{transfer.providerReference ?? '—'}</dd>
-              <dt className={'text-xs text-ink-muted'}>{'Authorised'}</dt>
+              <dt className={'text-xs text-ink-muted'}>{'Authorized'}</dt>
               <dd className={'text-ink'}>{formatClock(transfer.createdAt)}</dd>
             </dl>
 

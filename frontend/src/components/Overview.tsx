@@ -16,7 +16,7 @@ export default function Overview() {
   // The shared cadence: these balances move when the worker settles something
   // in the background, and refreshing on an independent schedule would show a
   // settled transfer beside a float balance from before it settled.
-  const { data } = useQuery({
+  const { data, isPending } = useQuery({
     queryFn: getOverview,
     queryKey: ledgerKeys.overview,
     refetchInterval: usePollInterval(),
@@ -34,14 +34,17 @@ export default function Overview() {
   return (
     <dl className={'grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-ink/10 sm:grid-cols-4'}>
       <StatCell
+        isLoading={isPending}
         label={'Available to disburse'}
         value={fund ? formatMoney(fund.balanceMinor, fund.currency) : '—'}
       />
       <StatCell
+        isLoading={isPending}
         label={'Held at provider'}
         value={float ? formatMoney(float.balanceMinor, float.currency) : '—'}
       />
       <StatCell
+        isLoading={isPending}
         label={'Books'}
         tone={data === undefined || areBooksBalanced ? undefined : 'text-danger'}
         value={
@@ -53,6 +56,7 @@ export default function Overview() {
         }
       />
       <StatCell
+        isLoading={isPending}
         label={'Needs attention'}
         tone={needsAttention > 0 ? 'text-pending' : undefined}
         value={data === undefined ? '—' : String(needsAttention)}

@@ -1,7 +1,7 @@
 # Payout Ledger
 
 A disbursement service for unconditional cash transfers. A programme sends money
-to recipients through a mobile-money provider, and the books stay correct while
+to recipients through a payment provider, and the books stay correct while
 that happens — including when the provider times out, a worker dies mid-payment,
 or the same request arrives twice.
 
@@ -74,7 +74,7 @@ The domain is small. The failures it survives are not.
 # Retry a disbursement with the same key: one payment, replayed response.
 curl -s -X POST localhost:8001/api/transfers \
   -H 'Content-Type: application/json' -H 'Idempotency-Key: try-this-once' \
-  -d '{"recipientId":"<id>","amountMinor":250000,"currency":"KES"}' -D-
+  -d '{"recipientId":"<id>","amountMinor":50000,"currency":"USD"}' -D-
 
 # Break the provider and watch the transfer reverse itself rather than
 # stranding the money. Three hooks, all off by default.
