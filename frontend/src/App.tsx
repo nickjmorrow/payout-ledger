@@ -7,6 +7,7 @@ import NewDisbursement from 'src/components/NewDisbursement';
 import Overview from 'src/components/Overview';
 import QueuePanel from 'src/components/QueuePanel';
 import RunList from 'src/components/RunList';
+import Section from 'src/components/Section';
 import ThemeToggle from 'src/components/ThemeToggle';
 import TransferList from 'src/components/TransferList';
 import useLiveUpdates from 'src/hooks/useLiveUpdates';
@@ -47,52 +48,34 @@ export default function App() {
       <Column className={'flex flex-col gap-8 py-8'}>
         <Overview />
 
-        <section className={'flex flex-col gap-3'}>
-          <h2 className={'text-xs font-medium tracking-wide text-ink-muted uppercase'}>
-            {'New disbursement'}
-          </h2>
+        <Section title={'New disbursement'}>
           <NewDisbursement onRunCreated={setRunId} />
-        </section>
+        </Section>
 
-        <section className={'flex flex-col gap-3'}>
-          <h2 className={'text-xs font-medium tracking-wide text-ink-muted uppercase'}>
-            {'Payment runs'}
-          </h2>
+        <Section title={'Payment runs'}>
           <RunList onSelect={setRunId} selectedId={runId} />
-        </section>
+        </Section>
 
-        <section className={'flex flex-col gap-3'}>
-          <h2 className={'text-xs font-medium tracking-wide text-ink-muted uppercase'}>
-            {'Disbursements'}
-          </h2>
+        <Section title={'Disbursements'}>
           <TransferList
             onClearRun={() => {
               setRunId(null);
             }}
             runId={runId}
           />
-        </section>
+        </Section>
 
-        <section className={'flex flex-col gap-3'}>
-          <h2 className={'text-xs font-medium tracking-wide text-ink-muted uppercase'}>
-            {'Reconciliation'}
-          </h2>
+        <Section title={'Reconciliation'}>
           <FindingList />
-        </section>
+        </Section>
 
-        <section className={'flex flex-col gap-3'}>
-          <h2 className={'text-xs font-medium tracking-wide text-ink-muted uppercase'}>
-            {'Queue'}
-          </h2>
+        <Section title={'Queue'}>
           <QueuePanel />
-        </section>
+        </Section>
 
-        <section className={'flex flex-col gap-3'}>
-          <h2 className={'text-xs font-medium tracking-wide text-ink-muted uppercase'}>
-            {'Dead letters'}
-          </h2>
+        <Section title={'Dead letters'}>
           <DeadLetterList />
-        </section>
+        </Section>
       </Column>
     </div>
   );

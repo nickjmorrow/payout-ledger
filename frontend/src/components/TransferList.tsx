@@ -74,55 +74,62 @@ export default function TransferList({ onClearRun, runId }: Props) {
           </button>
         </div>
       )}
-      <table className={'w-full text-left text-sm'}>
-        <thead className={'bg-surface-raised text-xs text-ink-muted'}>
-          <tr>
-            <th className={'px-4 py-2 font-medium'}>{'Recipient'}</th>
-            <th className={'px-4 py-2 font-medium'}>{'Amount'}</th>
-            <th className={'px-4 py-2 font-medium'}>{'Status'}</th>
-            <th className={'hidden px-4 py-2 font-medium sm:table-cell'}>{'Provider ref'}</th>
-            <th className={'px-4 py-2 font-medium'}>{'Started'}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {transfers.map((transfer) => (
-            <tr
-              className={[
-                'border-t border-ink/5',
-                transfer.id === selectedId ? 'bg-surface-raised' : '',
-              ].join(' ')}
-              key={transfer.id}
-            >
-              <td className={'px-4 py-2 text-ink'}>
-                <button
-                  className={'text-left underline-offset-2 hover:underline'}
-                  onClick={() => {
-                    setSelectedId(transfer.id);
-                  }}
-                  type={'button'}
-                >
-                  {transfer.recipientName}
-                </button>
-              </td>
-              <td className={'px-4 py-2 text-ink tabular-nums'}>
-                {formatMoney(transfer.amountMinor, transfer.currency)}
-              </td>
-              <td className={'px-4 py-2'}>
-                <StatusPill status={transfer.status} />
-                {transfer.failureReason !== null && (
-                  <span className={'ml-2 text-xs text-ink-muted'}>{transfer.failureReason}</span>
-                )}
-              </td>
-              <td className={'hidden px-4 py-2 font-mono text-xs text-ink-muted sm:table-cell'}>
-                {transfer.providerReference ?? '—'}
-              </td>
-              <td className={'px-4 py-2 text-xs text-ink-muted'}>
-                {formatTime(transfer.createdAt)}
-              </td>
+      {/* Scrolls sideways on a narrow screen rather than clipping the last column. */}
+      <div className={'overflow-x-auto'}>
+        <table className={'w-full text-left text-sm whitespace-nowrap'}>
+          <thead className={'bg-surface-raised text-xs text-ink-muted'}>
+            <tr>
+              <th className={'px-4 py-2 font-medium'}>{'Recipient'}</th>
+              <th className={'px-4 py-2 text-right font-medium'}>{'Amount'}</th>
+              <th className={'px-4 py-2 font-medium'}>{'Status'}</th>
+              <th className={'hidden px-4 py-2 font-medium sm:table-cell'}>{'Provider ref'}</th>
+              <th className={'px-4 py-2 font-medium'}>{'Started'}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {transfers.map((transfer) => (
+              <tr
+                className={[
+                  'border-t border-ink/5',
+                  transfer.id === selectedId ? 'bg-surface-raised' : '',
+                ].join(' ')}
+                key={transfer.id}
+              >
+                <td className={'px-4 py-2 text-ink'}>
+                  <button
+                    // Underlined at rest, not only on hover: the name is the way
+                    // into this transfer's history, and nothing else says so.
+                    className={
+                      'text-left font-medium underline decoration-ink/30 underline-offset-4 transition hover:decoration-ink'
+                    }
+                    onClick={() => {
+                      setSelectedId(transfer.id);
+                    }}
+                    type={'button'}
+                  >
+                    {transfer.recipientName}
+                  </button>
+                </td>
+                <td className={'px-4 py-2 text-right text-ink tabular-nums'}>
+                  {formatMoney(transfer.amountMinor, transfer.currency)}
+                </td>
+                <td className={'px-4 py-2'}>
+                  <StatusPill status={transfer.status} />
+                  {transfer.failureReason !== null && (
+                    <span className={'ml-2 text-xs text-ink-muted'}>{transfer.failureReason}</span>
+                  )}
+                </td>
+                <td className={'hidden px-4 py-2 font-mono text-xs text-ink-muted sm:table-cell'}>
+                  {transfer.providerReference ?? '—'}
+                </td>
+                <td className={'px-4 py-2 text-xs text-ink-muted'}>
+                  {formatTime(transfer.createdAt)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {selectedId !== null && (
         <TransferDetail

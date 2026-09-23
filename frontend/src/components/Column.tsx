@@ -20,5 +20,5 @@ interface Props {
  * the padding, which is also what stops the scroll container clipping it.
  */
 export default function Column({ children, className = '' }: Props) {
-  return <div className={['mx-auto w-full max-w-3xl px-4', className].join(' ')}>{children}</div>;
+  return <div className={['mx-auto w-full max-w-5xl px-4', className].join(' ')}>{children}</div>;
 }

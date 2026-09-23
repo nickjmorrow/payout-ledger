@@ -6,9 +6,18 @@
 const SECOND_MS = 1000;
 const MINUTE_MS = 60 * SECOND_MS;
 
-/** Clock time for a list row, in the reader's own locale and zone. */
+/**
+ * `"Sep 23, 6:24 PM"`, in the reader's own zone. The date is not optional in a
+ * list that outlives a day: "6:24 PM" alone leaves an operator guessing which
+ * evening.
+ */
 export function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleString('en-US', {
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    month: 'short',
+  });
 }
 
 /**
@@ -18,7 +27,7 @@ export function formatTime(iso: string): string {
  * they are the same moment, and a reader cannot tell which came first.
  */
 export function formatClock(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, {
+  return new Date(iso).toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
