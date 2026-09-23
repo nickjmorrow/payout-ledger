@@ -1,18 +1,19 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { ledgerKeys, listTransfers, type Transfer } from 'src/api/ledger';
+import useLiveStatus from 'src/hooks/useLiveStatus';
 import { pollIntervalFor } from 'src/polling';
 
 /**
- * Every disbursement, polled at the shared cadence.
+ * Every disbursement, kept current by the event stream, polled when it is down.
  *
- * A hook rather than a `useQuery` in each component so that both the table and
- * the balances above it derive their interval from the same data. TanStack
- * dedupes by key, so two callers are still one request.
+ * The interval is computed from this query's own data rather than through
+ * `usePollInterval`, which reads this hook — the one place the cadence starts.
  */
 export default function useTransfers(): UseQueryResult<Transfer[]> {
+  const isLive = useLiveStatus() === 'live';
   return useQuery({
     queryFn: listTransfers,
     queryKey: ledgerKeys.transfers,
-    refetchInterval: (query) => pollIntervalFor(query.state.data),
+    refetchInterval: (query) => pollIntervalFor(query.state.data, isLive),
   });
 }

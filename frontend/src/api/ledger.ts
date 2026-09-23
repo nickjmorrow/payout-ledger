@@ -113,8 +113,10 @@ export interface DisburseRequest {
  * member: `['transfers']` covers the list and every `['transfers', id]`.
  */
 export const ledgerKeys = {
+  findings: ['findings'] as const,
   overview: ['overview'] as const,
   recipients: ['recipients'] as const,
+  tasks: ['tasks'] as const,
   transfer: (id: string) => ['transfers', id] as const,
   transfers: ['transfers'] as const,
 };

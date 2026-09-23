@@ -16,11 +16,14 @@ frame looks like.
 the request bodies, and the resource shapes that genuinely only travel over
 HTTP. It imports from here; nothing imports back.
 
-Today this module holds only the base class, because nothing is streamed yet.
-The event vocabulary that used to live here was the chat transcript's and left
-with it. When the first thing worth watching live arrives, its frame shapes
-belong here rather than in `api/schemas.py`.
+The one frame streamed today is `Event`, below: a change notice, not a
+payload. It says *which family of rows* moved and which row, and nothing about
+what it now contains — the browser re-reads that from the API, so a lost frame
+costs a moment of staleness and never a wrong number. That is the property
+`bus.py` asks of everything on the live path.
 """
+
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
@@ -32,3 +35,24 @@ class ApiSchema(BaseModel):
         populate_by_name=True,
         from_attributes=True,
     )
+
+
+# The families a change can belong to. Each is a set of queries the console
+# holds, and the browser maps a topic to the queries it invalidates.
+# `frontend/src/events.ts` lists the same values; a structural test keeps the
+# two in step, because a topic the browser has not heard of is a change it
+# silently never shows.
+Topic = Literal["transfers", "tasks", "findings"]
+
+
+class Event(ApiSchema):
+    """Something in `topic` changed. Re-read it.
+
+    `transfer_id` is set when the thing that changed belongs to a transfer
+    without being one: a task sending or checking a payment. It lets the
+    browser refresh that transfer's open history rather than every one.
+    """
+
+    topic: Topic
+    id: str
+    transfer_id: str | None = None

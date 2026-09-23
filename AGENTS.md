@@ -325,6 +325,51 @@ enqueues its successor in the same transaction that records its findings. A
 crash between the two would otherwise stop reconciliation forever, and "the job
 that finds problems is the problem" is a bad failure mode.
 
+## Live updates
+
+The console hears about changes as they commit, over one Server-Sent Events
+stream (`GET /api/events`), and re-reads what they affect.
+
+**A notice, not the data.** Every frame is `{topic, id, transferId}`: a
+transfer, a task or a finding moved, and which one. The browser then re-reads
+through the ordinary endpoints. So a frame can be dropped, reordered or never
+sent, and the worst outcome is a moment of staleness. Anything a viewer could
+not recover by re-reading a table does not belong on this channel.
+
+**Announced inside the transaction that made the change.** `bus.announce` is a
+`pg_notify` on the caller's session, so it inherits the property the outbox
+already relies on: delivered at COMMIT, discarded on ROLLBACK. The console is
+never told about a transfer it cannot yet read, or about one that never
+happened. Every state change in `transfer_service`, `task_service` and
+reconciliation announces; a new one should too.
+
+**`ready` is sent after LISTEN is in place, and the browser re-reads everything
+on it.** That ordering is the whole argument for reconnecting safely. Headers
+go out before the subscription exists, so refreshing when the socket opens
+would leave a window where a change is seen by neither the refresh nor the
+stream.
+
+**Silence is death.** The server heartbeats every 10s and the browser drops a
+connection that has been quiet for 25s, then reconnects with backoff. A stream
+can die without closing: Vite's dev proxy keeps the browser's side open after
+the backend is gone, and the console said Live while hearing nothing, until the
+watchdog. Laptop sleep and NAT timeouts look the same. Change the heartbeat
+and the stall together.
+
+**`fetch`, not `EventSource`**, because `EventSource` cannot send a header, and
+the auth seam puts a bearer token on every request. `sse.ts` parses the stream.
+
+**Polling is the fallback.** While the stream is live, a 60s backstop remains
+to bound how long a lost notice can matter. While it is not, the console polls
+at the old cadence. Either way, every view refreshes in the same moment: the
+overview is re-read with every change, which is what keeps a settled transfer
+from sitting beside a float balance from before it settled.
+
+**No database session per stream.** Every open console shares the process's
+one LISTEN connection. Uvicorn runs with `--timeout-graceful-shutdown`, because
+it otherwise waits on every open console before restarting, and one open tab
+made every `--reload` hang forever.
+
 ## Layout
 
 ```
@@ -337,9 +382,9 @@ backend/app/
   logging.py           structlog setup + the logging rules.
   db.py                Async engine and session factory.
   models.py            SQLAlchemy models. THE SCHEMA'S SOURCE OF TRUTH.
-  wire.py              The camelCase convention every shape on the wire inherits.
+  wire.py              The camelCase convention, and the change-notice frame.
   seed.py              Chart of accounts (required) + demo data (optional).
-  bus.py               LISTEN/NOTIFY fan-out.
+  bus.py               LISTEN/NOTIFY fan-out, and `announce`.
   api/
     deps.py            Shared dependencies, including the auth seam.
     middleware.py      Request ids and access logging. Pure ASGI.
@@ -367,9 +412,12 @@ frontend/src/
   main.tsx             Mounts App inside its providers.
   App.tsx              The console: one page.
   index.css            Tailwind + the @theme block. The only stylesheet.
-  api/                 The HTTP boundary. No React.
+  api/                 The HTTP boundary and the event stream. No React.
   money.ts             Minor units in and out. No React.
-  polling.ts           The shared refetch cadence. No React.
+  events.ts            Which queries a change notice re-reads. No React.
+  sse.ts               The event-stream parser. No React.
+  polling.ts           The fallback refetch cadence. No React.
+  labels.ts            Schema identifiers as words. No React.
   format.ts            Timestamps and durations. No React.
   hooks/               Stateful logic that isn't layout. One hook per file.
   components/          UI. One per file, default export, named after the file.
@@ -516,11 +564,14 @@ wrote down.
 ## Frontend
 
 - **Server state is TanStack Query. Local UI state is `useState`.**
-- **One polling cadence, shared.** `polling.ts` decides it and both the balances
-  and the transfer list derive theirs from the same query. Polling
+- **Every view refreshes in the same moment.** Changes arrive over the event
+  stream and `events.ts` re-reads the overview with every one; when the stream
+  is down, `usePollInterval` gives every view the same cadence. Refreshing
   independently would let the console show a settled transfer beside a float
   balance from before it settled — which, for a ledger, reads as the books not
   adding up. This was a real bug, found by driving the UI rather than by a test.
+  A new view whose numbers the worker can move needs both: a topic in
+  `keysToInvalidate`, and `usePollInterval`.
 - **Colours are semantic tokens** from the `@theme` block in `index.css`, never
   literal Tailwind palette classes. For a fraction of a colour use `ink`
   (`border-ink/10`), which inverts with the theme where `black` and `white` do
@@ -560,6 +611,7 @@ or an AST walk.
 | Task kinds dispatch through the registry, not a branch in `execute` | backend |
 | Registering one task kind twice is refused | backend |
 | Every `__init__.py` is empty | backend |
+| The browser knows every topic the server announces | backend |
 | No literal Tailwind colour anywhere in `src/` | frontend |
 | The view model and `api/` import no React | frontend |
 | A component or hook file is named after what it exports | frontend |

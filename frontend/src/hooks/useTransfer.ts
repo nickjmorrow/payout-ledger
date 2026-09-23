@@ -1,23 +1,25 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { getTransfer, ledgerKeys, type TransferDetail } from 'src/api/ledger';
+import useLiveStatus from 'src/hooks/useLiveStatus';
 import { pollIntervalFor } from 'src/polling';
 
 /**
- * One transfer with its journal and its attempts, polled at the shared cadence
- * while it is still moving.
+ * One transfer with its journal and its attempts.
  *
- * The list query already knows this transfer's status, but the detail is
- * re-read on its own schedule anyway: what changes underneath an open drawer
- * is not the status column but the rows *behind* it — a settlement journal
- * appearing, a retry being counted — and those are not in the list.
+ * What changes underneath an open drawer is mostly not the status column but
+ * the rows *behind* it — a settlement journal appearing, a retry being
+ * counted — so the detail is re-read on its own notices (`tasks` events carry
+ * the transfer they belong to) and on its own polling schedule when the stream
+ * is down.
  */
 export default function useTransfer(id: string): UseQueryResult<TransferDetail> {
+  const isLive = useLiveStatus() === 'live';
   return useQuery({
     queryFn: () => getTransfer(id),
     queryKey: ledgerKeys.transfer(id),
     refetchInterval: (query) => {
       const detail = query.state.data;
-      return pollIntervalFor(detail === undefined ? undefined : [detail]);
+      return pollIntervalFor(detail === undefined ? undefined : [detail], isLive);
     },
   });
 }

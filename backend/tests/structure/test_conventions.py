@@ -324,3 +324,31 @@ def test_package_inits_are_empty():
         "symbol two import paths and hides which layer a call goes to; import the module instead "
         "(`from app.services import task_service`). See AGENTS.md > Layout."
     )
+
+
+# ------------------------------------------------------- the live vocabulary
+#
+# AGENTS.md > Live updates: the server announces a change under a topic and
+# the browser decides what to re-read from it. A topic the browser has not
+# heard of is refused by `isChangeEvent` — safely, but silently: the change is
+# simply never shown until the next reconnect or backstop poll. Two lists in
+# two languages is the drift this catches.
+
+
+def test_the_browser_knows_every_topic_the_server_announces():
+    from typing import get_args
+
+    from app.wire import Topic
+
+    source = (FRONTEND_SRC / "events.ts").read_text()
+    match = re.search(r"export const TOPICS = \[([^\]]*)\] as const", source)
+    assert match is not None, "frontend/src/events.ts no longer declares `TOPICS` as a const array"
+    browser = set(re.findall(r"'([a-z_]+)'", match.group(1)))
+    server = set(get_args(Topic))
+
+    assert browser == server, (
+        f"the server announces {sorted(server)} and the browser understands {sorted(browser)}. "
+        "A topic missing from frontend/src/events.ts is a change the console silently never "
+        "shows; one missing from app/wire.py is dead code in the browser. Add it to both, and "
+        "decide in `keysToInvalidate` what it re-reads. See AGENTS.md > Live updates."
+    )

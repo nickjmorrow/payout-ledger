@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { listFindings } from 'src/api/ledger';
+import { ledgerKeys, listFindings } from 'src/api/ledger';
 import { formatTime } from 'src/format';
+import usePollInterval from 'src/hooks/usePollInterval';
 
 /**
  * What reconciliation found, and whether it fixed it.
@@ -14,8 +15,8 @@ import { formatTime } from 'src/format';
 export default function FindingList() {
   const { data: findings } = useQuery({
     queryFn: listFindings,
-    queryKey: ['findings'],
-    refetchInterval: 15_000,
+    queryKey: ledgerKeys.findings,
+    refetchInterval: usePollInterval(),
   });
 
   if (findings === undefined || findings.length === 0) {

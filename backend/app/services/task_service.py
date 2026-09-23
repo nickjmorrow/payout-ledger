@@ -22,7 +22,7 @@ from typing import Any
 from sqlalchemy import exists, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.bus import publish
+from app.bus import announce, publish
 from app.config import settings
 from app.logging import get_logger
 from app.models import Task
@@ -54,7 +54,7 @@ _CLAIM = text(
            updated_at = now()
       from claimed
      where t.id = claimed.id
-    returning t.id
+    returning t.id, t.payload ->> 'transfer_id' as transfer_id
     """
 )
 
@@ -68,7 +68,7 @@ _SWEEP = text(
            updated_at = now()
      where status = 'running'
        and claimed_at < now() - make_interval(secs => :stale_seconds)
-    returning id
+    returning id, payload ->> 'transfer_id' as transfer_id
     """
 )
 
@@ -92,6 +92,21 @@ _RETRY = text(
      where id = :task_id
     """
 )
+
+
+async def _announce(session: AsyncSession, *, task_id: uuid.UUID, transfer_id: object) -> None:
+    """Tell open consoles a task moved, in the transaction that moved it.
+
+    Every write to a task row below goes through here, so the operations view
+    never has to poll to see a claim or a retry. `transfer_id` arrives straight
+    off a JSONB payload and is only trusted if it is a string.
+    """
+    await announce(
+        session,
+        topic="tasks",
+        subject_id=task_id,
+        transfer_id=transfer_id if isinstance(transfer_id, str) else None,
+    )
 
 
 async def enqueue(
@@ -130,6 +145,7 @@ async def enqueue(
     # Only worth waking a worker for something it can claim right now.
     if run_at is None:
         await publish(session, WAKE_CHANNEL, {"task_id": str(task.id)})
+    await _announce(session, task_id=task.id, transfer_id=task.payload.get("transfer_id"))
 
     logger.info("task enqueued", task_id=str(task.id), kind=kind)
     return task
@@ -137,12 +153,14 @@ async def enqueue(
 
 async def claim_next(session: AsyncSession, *, worker_id: str) -> Task | None:
     """Take the oldest due task, or None. Safe to call from any number of workers."""
-    result = await session.execute(_CLAIM, {"worker_id": worker_id})
-    task_id = result.scalar()
-    await session.commit()
-
-    if task_id is None:
+    row = (await session.execute(_CLAIM, {"worker_id": worker_id})).first()
+    if row is None:
+        await session.commit()
         return None
+
+    task_id: uuid.UUID = row.id
+    await _announce(session, task_id=task_id, transfer_id=row.transfer_id)
+    await session.commit()
 
     # populate_existing, because the claim was a raw UPDATE and this session may
     # already hold a copy of that row from enqueueing it. With
@@ -164,6 +182,7 @@ async def finish(
     # comes from Postgres, and two clocks in one table means any ordering
     # question is decided by container clock skew.
     task.updated_at = func.now()
+    await _announce(session, task_id=task.id, transfer_id=task.payload.get("transfer_id"))
     await session.commit()
     logger.info("task finished", task_id=str(task.id), status=status)
 
@@ -181,6 +200,7 @@ async def release(session: AsyncSession, *, task: Task) -> None:
     between an unlucky task and one that kills whatever picks it up.
     """
     await session.execute(_RELEASE, {"task_id": task.id})
+    await _announce(session, task_id=task.id, transfer_id=task.payload.get("transfer_id"))
     await session.commit()
     logger.info("task released", task_id=str(task.id), attempts=task.attempts)
 
@@ -190,6 +210,7 @@ async def retry_later(
 ) -> None:
     """Requeue a failed task to run again after a delay."""
     await session.execute(_RETRY, {"task_id": task.id, "error": error, "delay": delay_seconds})
+    await _announce(session, task_id=task.id, transfer_id=task.payload.get("transfer_id"))
     await session.commit()
     logger.warning(
         "task retrying",
@@ -268,6 +289,7 @@ async def request_cancel(session: AsyncSession, *, task: Task) -> None:
     # to cooperate with yet.
     if task.status == "pending":
         task.status = "cancelled"
+    await _announce(session, task_id=task.id, transfer_id=task.payload.get("transfer_id"))
     await session.commit()
     logger.info("task cancel requested", task_id=str(task.id), status=task.status)
 
@@ -281,7 +303,10 @@ async def sweep_stale(session: AsyncSession, *, stale_seconds: int | None = None
     if stale_seconds is None:
         stale_seconds = settings.task_stale_seconds
     result = await session.execute(_SWEEP, {"stale_seconds": stale_seconds})
-    ids = [row[0] for row in result.all()]
+    rows = result.all()
+    for row in rows:
+        await _announce(session, task_id=row.id, transfer_id=row.transfer_id)
+    ids = [row.id for row in rows]
     await session.commit()
     if ids:
         logger.warning("tasks swept", count=len(ids))

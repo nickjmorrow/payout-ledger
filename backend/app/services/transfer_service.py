@@ -28,6 +28,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.bus import announce
 from app.logging import get_logger
 from app.models import Recipient, Transfer
 from app.services import ledger_service, task_service
@@ -122,6 +123,7 @@ async def initiate(
         payload={"transfer_id": str(transfer.id)},
         request_id=request_id,
     )
+    await announce(session, topic="transfers", subject_id=transfer.id)
 
     logger.info(
         "transfer initiated",
@@ -145,6 +147,7 @@ async def mark_processing(
     transfer.status = "processing"
     transfer.provider_reference = provider_reference
     await session.flush()
+    await announce(session, topic="transfers", subject_id=transfer.id)
 
 
 async def mark_succeeded(session: AsyncSession, *, transfer: Transfer) -> None:
@@ -173,6 +176,7 @@ async def mark_succeeded(session: AsyncSession, *, transfer: Transfer) -> None:
     )
     transfer.status = "succeeded"
     await session.flush()
+    await announce(session, topic="transfers", subject_id=transfer.id)
     logger.info("transfer succeeded", transfer_id=str(transfer.id))
 
 
@@ -208,6 +212,7 @@ async def mark_failed(session: AsyncSession, *, transfer: Transfer, reason: str)
     transfer.status = "failed"
     transfer.failure_reason = reason
     await session.flush()
+    await announce(session, topic="transfers", subject_id=transfer.id)
     logger.info("transfer failed", transfer_id=str(transfer.id), reason=reason)
 
 

@@ -34,8 +34,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.logging import get_logger
+from app.wire import Event, Topic
 
 logger = get_logger(__name__)
+
+# Where every change notice goes, whichever process made the change. The
+# console listens here. The worker's wake-up channel is a separate one in
+# task_service, because "there is work" and "something changed" have different
+# listeners with different reasons to wake.
+EVENTS_CHANNEL = "ledger_events"
 
 # Bounded so one stalled browser cannot grow a queue without limit. Overflow
 # drops the oldest frames, which costs a flicker of live text and nothing more —
@@ -139,3 +146,26 @@ async def publish(session: AsyncSession, channel: str, frame: dict[str, Any]) ->
 # One per process. Started and stopped by the app lifespan in main.py, and by
 # the worker in worker/loop.py.
 bus = Bus()
+
+
+async def announce(
+    session: AsyncSession,
+    *,
+    topic: Topic,
+    subject_id: UUID,
+    transfer_id: UUID | str | None = None,
+) -> None:
+    """Tell every open console that one row in `topic` changed. **Does not commit.**
+
+    A notice, not a payload: the browser re-reads the row rather than trusting
+    a copy of it, so a frame can be lost or reordered and the worst case is a
+    moment of staleness. It goes through `publish`, so it inherits the property
+    that makes calling it mid-transaction safe: it lands at COMMIT and vanishes
+    on ROLLBACK. A console is never told about a transfer it cannot yet read.
+    """
+    frame = Event(
+        topic=topic,
+        id=str(subject_id),
+        transfer_id=str(transfer_id) if transfer_id is not None else None,
+    ).model_dump(by_alias=True)
+    await publish(session, EVENTS_CHANNEL, frame)

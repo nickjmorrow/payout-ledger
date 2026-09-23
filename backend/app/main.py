@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.middleware import RequestContextMiddleware
-from app.api.routes import health, operations, transfers
+from app.api.routes import events, health, operations, transfers
 from app.bus import bus
 from app.config import settings
 from app.db import engine
@@ -56,6 +56,7 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api")
 app.include_router(transfers.router, prefix="/api")
 app.include_router(operations.router, prefix="/api")
+app.include_router(events.router, prefix="/api")
 
 
 @app.exception_handler(Exception)

@@ -1,9 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { getOverview, ledgerKeys } from 'src/api/ledger';
 import StatCell from 'src/components/StatCell';
-import useTransfers from 'src/hooks/useTransfers';
+import usePollInterval from 'src/hooks/usePollInterval';
 import { formatMoney } from 'src/money';
-import { pollIntervalFor } from 'src/polling';
 
 /**
  * The programme at a glance: what is left to give away, what is still held at
@@ -14,17 +13,13 @@ import { pollIntervalFor } from 'src/polling';
  * a ledger, as the books not adding up.
  */
 export default function Overview() {
-  // Subscribed to the transfers query purely to share its cadence: these
-  // balances move when the worker settles something in the background, and
-  // polling on an independent schedule would show a settled transfer beside a
-  // float balance from before it settled. TanStack dedupes by key, so this
-  // costs no extra request.
-  const { data: transfers } = useTransfers();
-
+  // The shared cadence: these balances move when the worker settles something
+  // in the background, and refreshing on an independent schedule would show a
+  // settled transfer beside a float balance from before it settled.
   const { data } = useQuery({
     queryFn: getOverview,
     queryKey: ledgerKeys.overview,
-    refetchInterval: pollIntervalFor(transfers),
+    refetchInterval: usePollInterval(),
   });
 
   const fund = data?.accounts.find((account) => account.kind === 'program_funding');

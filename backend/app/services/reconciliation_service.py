@@ -43,6 +43,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.bus import announce
 from app.logging import get_logger
 from app.models import ReconciliationFinding, Transfer
 from app.provider.base import PaymentProvider, ProviderPaymentView
@@ -139,6 +140,12 @@ async def run(
         )
 
     await session.flush()
+    # After the flush, so each finding has its id. Delivered at the caller's
+    # commit, in the same transaction that recorded them.
+    for finding in report.findings:
+        await announce(
+            session, topic="findings", subject_id=finding.id, transfer_id=finding.transfer_id
+        )
     logger.info(
         "reconciliation complete",
         checked=report.checked,

@@ -29,9 +29,16 @@ EXPOSE 8000
 FROM base AS dev
 
 # --reload picks up edits through the source mount in docker-compose.yml.
+#
+# --timeout-graceful-shutdown because an open console holds a stream open for
+# as long as its tab lives, and uvicorn waits for every connection to close
+# before it restarts. Without a limit, one open tab makes every save hang at
+# "Waiting for connections to close" — forever. The console reconnects by
+# itself and re-reads everything on `ready`, so cutting it is harmless.
 CMD ["uvicorn", "app.main:app", \
      "--host", "0.0.0.0", "--port", "8000", \
-     "--reload", "--reload-dir", "/srv/app"]
+     "--reload", "--reload-dir", "/srv/app", \
+     "--timeout-graceful-shutdown", "2"]
 
 
 FROM base AS production
@@ -50,4 +57,9 @@ HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
 #
 # One worker. Add --workers N to use more cores, but note the LISTEN connection
 # in app/bus.py is per process, so each one opens its own.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+#
+# The shutdown timeout is for the event stream: a deploy sends SIGTERM, and
+# uvicorn would otherwise wait on every open console until Docker's SIGKILL ten
+# seconds later. Five lets ordinary requests finish and then lets go.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", \
+     "--timeout-graceful-shutdown", "5"]
