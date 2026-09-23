@@ -349,6 +349,39 @@ class LedgerEntry(Base):
     )
 
 
+class PaymentRun(Base):
+    """Many disbursements, authorised together as one decision.
+
+    **There is no status column, and no total.** A run's progress is the
+    statuses of its transfers and its total is the sum of their amounts, both
+    counted when asked — the same reasoning that keeps a balance off
+    `accounts`. A stored status would be a second record of what the transfers
+    already say, and the first time a settlement updated one and not the
+    other, the console would show a run as complete with payments still in
+    flight.
+
+    What the row does hold is the one thing the transfers cannot: that these
+    payments were decided together.
+    """
+
+    __tablename__ = "payment_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    # Free text for a person: "September cycle, Siaya county".
+    memo: Mapped[str | None] = mapped_column(Text, nullable=True)
+    currency: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint("char_length(currency) = 3", name="payment_runs_currency_check"),
+        Index("payment_runs_created_idx", desc("created_at")),
+    )
+
+
 class Transfer(Base):
     """One disbursement to one recipient: the domain object above the books.
 
@@ -376,6 +409,12 @@ class Transfer(Base):
     # provider payment means we paid once and recorded twice.
     provider_reference: Mapped[str | None] = mapped_column(Text, nullable=True, unique=True)
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The run this was authorised as part of, if any. Null for a one-off.
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("payment_runs.id", ondelete="RESTRICT", name="transfers_run_id_fkey"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -397,6 +436,8 @@ class Transfer(Base):
         ),
         Index("transfers_status_idx", "status", desc("created_at")),
         Index("transfers_recipient_idx", "recipient_id", desc("created_at")),
+        # A run's progress is a GROUP BY over this.
+        Index("transfers_run_idx", "run_id"),
     )
 
 

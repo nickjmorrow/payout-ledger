@@ -47,7 +47,8 @@ docker compose up          # db, migrate+seed, backend, worker, frontend
 ```
 
 Then <http://localhost:3001>. The programme is seeded with an opening balance
-and six recipients; authorise a disbursement and watch it settle.
+and 24 recipients; authorise a disbursement, or a payment run to all of them,
+and watch it settle.
 
 `scripts/setup.sh` once per clone, `scripts/check.sh` for everything.
 
@@ -157,12 +158,42 @@ Verified by deleting the lock and watching
 `test_concurrent_transfers_cannot_overdraw_the_fund` report
 `['authorised', 'authorised']`. Do that again if you change this.
 
+### Payment runs
+
+A run is many transfers authorised as one decision (`run_service`), and it is
+**all or nothing**: every transfer or none. That is not a policy on top of the
+transfers — it is what doing the whole run in one transaction means. N calls to
+`transfer_service.initiate`, one commit. A run that fails on its seventh
+recipient leaves no trace of the first six. Partial runs sound kinder and are
+worse: an operator told "twenty-three of forty authorised" has to work out which
+seventeen to retry against a fund that moved underneath them, and the chance of
+paying someone twice is the chance they get that list wrong.
+
+The fund is checked **for the run's total**, under the funding lock, before
+anything is posted. Each `initiate` would refuse the transfer that tipped the
+fund over anyway, but with an error about one recipient when the truth is about
+the total. `test_two_runs_at_once_cannot_overdraw_the_fund` is the write-skew
+test a run at a time.
+
+**A run has no status and no total.** Both are counted from its transfers when
+asked, for the reason balances are: a stored status is a second record of what
+the transfers already say, and would one day say a run was finished with
+payments still in flight. The row holds only what the transfers cannot — that
+they were decided together.
+
 ## Idempotency
 
-**`POST /api/transfers` requires an `Idempotency-Key` header.** Not optional. An
-endpoint that moves money and accepts a keyless request will eventually pay
-somebody twice, and the client is the only party that knows two requests are the
-same request.
+**`POST /api/transfers` and `POST /api/runs` require an `Idempotency-Key`
+header.** Not optional. An endpoint that moves money and accepts a keyless
+request will eventually pay somebody twice, and the client is the only party
+that knows two requests are the same request. A run raises the stakes: a
+timed-out run retried without its key authorises every payment in it again.
+
+The HTTP half — four service answers into four responses — is
+`api/idempotent.py`, written once for both endpoints. The 409 carries
+`Retry-After` on the exception rather than on the injected `Response`, because
+FastAPI discards the latter when a handler raises. It had been set there, and
+never reached a client, until a test asked for it.
 
 `idempotency_service.claim` is `INSERT ... ON CONFLICT DO NOTHING`, not a SELECT
 followed by an INSERT. The read-then-write version has a window in which two
@@ -187,8 +218,8 @@ transfer. Two identical requests must not give two different answers even if the
 transfer has moved on since.
 
 The browser holds one key per attempt and reuses it across retries
-(`hooks/useDisburse.ts`), regenerating only on success. A fresh key per retry
-would defeat the entire mechanism.
+(`hooks/useDisburse.ts`, `hooks/useCreateRun.ts`), regenerating only on success.
+A fresh key per retry would defeat the entire mechanism.
 
 ## The provider seam
 
@@ -389,10 +420,12 @@ backend/app/
     deps.py            Shared dependencies, including the auth seam.
     middleware.py      Request ids and access logging. Pure ASGI.
     schemas.py         The {data, meta} envelope + the HTTP-only shapes.
+    idempotent.py      Four idempotency answers into four HTTP responses.
     routes/            Thin: validate -> authorize -> call a service -> respond.
   services/
     ledger_service.py        Posting, balances, the chart of accounts.
     transfer_service.py      The disbursement lifecycle.
+    run_service.py           Payment runs: many transfers, one decision.
     idempotency_service.py   Making a repeated request one request.
     reconciliation_service.py  Comparing our books to the provider's.
     recipient_service.py     Recipients.
@@ -418,6 +451,7 @@ frontend/src/
   sse.ts               The event-stream parser. No React.
   polling.ts           The fallback refetch cadence. No React.
   labels.ts            Schema identifiers as words. No React.
+  runs.ts              A payment run's progress, in words. No React.
   format.ts            Timestamps and durations. No React.
   hooks/               Stateful logic that isn't layout. One hook per file.
   components/          UI. One per file, default export, named after the file.
@@ -639,7 +673,6 @@ each one needs already exists.
 | Multi-currency | A second programme | Accounts and journals are already per-currency; what is missing is an FX leg, not a column |
 | Webhooks from the provider | Polling latency actually bothers somebody | `settle_transfer` already does the work; a webhook would just call it sooner |
 | Approval workflow | Disbursements need a second pair of eyes | `pending` already means "authorised, not sent" |
-| Batch disbursement | One at a time stops being plausible | `initiate` is already per-transfer and transactional |
 
 **Delete a row the day it stops being true.** A stale "deliberately missing"
 entry is worse than no table: it is the document telling you not to look.

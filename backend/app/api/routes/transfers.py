@@ -1,10 +1,10 @@
 """Disbursement endpoints.
 
 Thin, like every route here: validate, authorize, call a service, respond. The
-only thing with any judgement in it is the idempotency dance in `create`, and
-that is here rather than in a service because it is about HTTP — it turns four
-service outcomes into four status codes, and the stored response it replays is
-a response.
+only thing with any judgement in it is the idempotency dance in `create`, which
+lives in `api/idempotent.py` rather than in a service because it is about HTTP —
+it turns four service outcomes into four status codes, and the stored response
+it replays is a response.
 """
 
 import uuid
@@ -13,6 +13,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 
 from app.api.deps import CurrentUser, DbSession
+from app.api.idempotent import claim_or_replay
 from app.api.schemas import (
     ApiResponse,
     JournalOut,
@@ -25,7 +26,6 @@ from app.api.schemas import (
 from app.logging import get_logger
 from app.models import Transfer
 from app.services import idempotency_service, ledger_service, task_service, transfer_service
-from app.services.idempotency_service import InFlightError, KeyConflictError, Replay
 
 logger = get_logger(__name__)
 
@@ -44,6 +44,7 @@ def _out(transfer: Transfer) -> TransferOut:
         status=transfer.status,  # pyright: ignore[reportArgumentType]
         provider_reference=transfer.provider_reference,
         failure_reason=transfer.failure_reason,
+        run_id=transfer.run_id,
         created_at=transfer.created_at,
         updated_at=transfer.updated_at,
     )
@@ -76,28 +77,16 @@ async def create(
     """
     payload: dict[str, Any] = body.model_dump(mode="json", by_alias=True)
 
-    try:
-        claimed = await idempotency_service.claim(
-            session, key=idempotency_key, endpoint=ENDPOINT, body=payload
-        )
-    except InFlightError as exc:
-        # 409 rather than 425 Too Early: 425 is specific to replayed TLS early
-        # data and means something else. `Retry-After` because the wait is
-        # bounded by the other request's transaction, not open-ended.
-        response.headers["Retry-After"] = "1"
-        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-    except KeyConflictError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
-
-    if isinstance(claimed, Replay):
+    replay = await claim_or_replay(
+        session, key=idempotency_key, endpoint=ENDPOINT, body=payload, response=response
+    )
+    if replay is not None:
         # Not re-derived from the transfer row: what the caller gets back must
         # be what the first request actually returned, even if the transfer has
         # moved on since. A replay that reported the *current* status would
         # make two identical requests give two different answers, which is the
         # one thing idempotency is supposed to rule out.
-        response.status_code = claimed.status
-        response.headers["Idempotency-Replayed"] = "true"
-        return ApiResponse(data=TransferOut.model_validate(claimed.body))
+        return ApiResponse(data=TransferOut.model_validate(replay.body))
 
     try:
         transfer = await transfer_service.initiate(
@@ -131,8 +120,11 @@ async def create(
 
 
 @router.get("")
-async def list_transfers(session: DbSession, _user: CurrentUser) -> ApiResponse[list[TransferOut]]:
-    transfers = await transfer_service.recent(session)
+async def list_transfers(
+    session: DbSession, _user: CurrentUser, run_id: uuid.UUID | None = None
+) -> ApiResponse[list[TransferOut]]:
+    """The newest transfers; `?run_id=` for the ones in one payment run."""
+    transfers = await transfer_service.recent(session, run_id=run_id)
     for transfer in transfers:
         await session.refresh(transfer, ["recipient"])
     return ApiResponse(data=[_out(t) for t in transfers])

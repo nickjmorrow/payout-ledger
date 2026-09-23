@@ -12,7 +12,7 @@ docker compose up
 ```
 
 Then open <http://localhost:3001>. The programme starts with an opening balance
-and six recipients. Authorise a disbursement and watch it move: **pending**
+and 24 recipients. Authorise a disbursement and watch it move: **pending**
 while the fund is debited and nobody has been paid yet, **processing** once the
 provider accepts it, **succeeded** when they confirm the money arrived.
 

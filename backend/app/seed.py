@@ -42,6 +42,12 @@ OPENING_BALANCE_MINOR = 2_000_000_00
 # Names and numbers are obviously fictional. The +254 prefix is Kenya, matching
 # the KES currency, so the demo reads as one coherent programme rather than a
 # pile of unrelated test rows.
+#
+# Twenty-four rather than a handful so a payment run is a real batch: enough
+# transfers that the queue visibly works through them, and that two workers
+# claiming with SKIP LOCKED take different ones. Appending here is safe on a
+# database seeded with fewer — the insert below is ON CONFLICT DO NOTHING on
+# the number, so the originals stay and only the new ones arrive.
 DEMO_RECIPIENTS = [
     ("Asha Mwangi", "+254700000101"),
     ("Brian Otieno", "+254700000102"),
@@ -49,6 +55,24 @@ DEMO_RECIPIENTS = [
     ("David Kipchoge", "+254700000104"),
     ("Esther Nyambura", "+254700000105"),
     ("Francis Mutua", "+254700000106"),
+    ("Grace Akinyi", "+254700000107"),
+    ("Hassan Omar", "+254700000108"),
+    ("Irene Chebet", "+254700000109"),
+    ("James Kamau", "+254700000110"),
+    ("Khadija Abdi", "+254700000111"),
+    ("Lucy Njeri", "+254700000112"),
+    ("Moses Ochieng", "+254700000113"),
+    ("Naomi Jepkosgei", "+254700000114"),
+    ("Peter Mwangi", "+254700000115"),
+    ("Rose Atieno", "+254700000116"),
+    ("Samuel Kiprono", "+254700000117"),
+    ("Tabitha Wambui", "+254700000118"),
+    ("Victor Onyango", "+254700000119"),
+    ("Winnie Muthoni", "+254700000120"),
+    ("Yusuf Hassan", "+254700000121"),
+    ("Zipporah Nekesa", "+254700000122"),
+    ("Daniel Kiplagat", "+254700000123"),
+    ("Mercy Adhiambo", "+254700000124"),
 ]
 
 

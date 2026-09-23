@@ -14,8 +14,13 @@ describe('keysToInvalidate', () => {
     }
   });
 
-  it('refreshes the transfer family when a transfer moves', () => {
-    expect(keysToInvalidate([change('transfers')])).toEqual([['overview'], ['transfers']]);
+  it('refreshes the transfer family and the runs when a transfer moves', () => {
+    // A run's progress is counted from its transfers, so it moves with them.
+    expect(keysToInvalidate([change('transfers')])).toEqual([
+      ['overview'],
+      ['transfers'],
+      ['runs'],
+    ]);
   });
 
   it('refreshes only the one history when a task moves, not the whole list', () => {
@@ -28,7 +33,7 @@ describe('keysToInvalidate', () => {
 
   it('collapses a burst into one refresh per key', () => {
     const burst = Array.from({ length: 20 }, () => change('transfers'));
-    expect(keysToInvalidate(burst)).toEqual([['overview'], ['transfers']]);
+    expect(keysToInvalidate(burst)).toEqual([['overview'], ['transfers'], ['runs']]);
   });
 
   it('drops a detail key when its whole family is already being refreshed', () => {

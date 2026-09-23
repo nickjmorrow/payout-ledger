@@ -31,17 +31,19 @@ from sqlalchemy import text
 
 from alembic import command
 from app.db import SessionFactory, engine
+from app.models import Base
 from tests.conftest import ADMIN_DSN, TEST_DB
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
-# CASCADE resolves the FK order for us, so this list does not have to be
-# topologically sorted — but every table does have to be named, or a test that
-# leaves rows behind silently poisons the next one.
-TABLES = (
-    "tasks, recipients, accounts, transfers, journal_entries, ledger_entries,"
-    " idempotency_keys, provider_payments, reconciliation_findings"
-)
+# Every table the models declare, read from the models rather than listed by
+# hand. A table missing from this list is one whose rows leak from each test
+# into the next, and that is not hypothetical: it was a hand-written list, and
+# `payment_runs` was added to the schema and not to it — so a run created by
+# one test made the next test's "nothing was created" assertion fail, and
+# looked exactly like a transaction that had half-committed. CASCADE resolves
+# the FK order, so the list does not have to be sorted.
+TABLES = ", ".join(table.name for table in Base.metadata.sorted_tables)
 
 
 def _migrate() -> None:

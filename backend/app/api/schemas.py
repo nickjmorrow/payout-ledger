@@ -76,8 +76,22 @@ class TransferOut(ApiSchema):
     status: Literal["pending", "processing", "succeeded", "failed"]
     provider_reference: str | None
     failure_reason: str | None
+    run_id: UUID | None
     created_at: datetime
     updated_at: datetime
+
+
+class RunOut(ApiSchema):
+    """A payment run and its progress, counted from its transfers when asked."""
+
+    id: UUID
+    memo: str | None
+    currency: str
+    created_at: datetime
+    count: int
+    total_minor: int
+    # Transfer status -> how many of this run's transfers are in it.
+    by_status: dict[str, int]
 
 
 class LineOut(ApiSchema):
@@ -158,6 +172,19 @@ class OverviewOut(ApiSchema):
     trial_balance_minor: int
     unresolved_findings: int
     dead_lettered: int
+
+
+class RunItemIn(ApiSchema):
+    recipient_id: UUID
+    amount_minor: int = Field(gt=0, le=settings.max_transfer_minor)
+
+
+class RunIn(ApiSchema):
+    # Bounded because a run is one transaction: its size is how long the
+    # funding lock is held. See `max_run_size` in config.py.
+    items: list[RunItemIn] = Field(min_length=1, max_length=settings.max_run_size)
+    currency: str = Field(min_length=3, max_length=3)
+    memo: str | None = Field(default=None, max_length=200)
 
 
 class TransferIn(ApiSchema):

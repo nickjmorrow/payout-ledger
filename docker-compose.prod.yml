@@ -91,6 +91,13 @@ services:
       target: production
     restart: unless-stopped
     command: ['python', '-m', 'app.worker']
+    # Two, so the claim is contended for real. `for update skip locked` is the
+    # property the whole queue rests on, and with one worker it is never tested
+    # by anything but the suite: two take different rows from the same payment
+    # run, and a regression would show as one payment sent twice. Cheap — each
+    # is one Python process and one LISTEN connection.
+    deploy:
+      replicas: 2
     environment:
       DATABASE_URL: *database_url
       LOG_LEVEL: ${LOG_LEVEL:-info}

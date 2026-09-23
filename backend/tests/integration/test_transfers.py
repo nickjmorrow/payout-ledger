@@ -21,7 +21,7 @@ from app.bus import bus
 from app.db import SessionFactory
 from app.main import app
 from app.models import Account, Recipient
-from app.services import ledger_service, transfer_service
+from app.services import idempotency_service, ledger_service, transfer_service
 from app.services.ledger_service import Posting
 
 KES = "KES"
@@ -301,3 +301,25 @@ async def test_the_detail_shows_the_journal_and_the_attempts(client, session, re
 async def test_an_unknown_transfer_detail_is_a_404(client):
     response = await client.get(f"/api/transfers/{uuid.uuid4()}")
     assert response.status_code == 404
+
+
+@pytest.mark.usefixtures("chart")
+async def test_a_key_still_in_flight_is_a_409_that_says_when_to_retry(client, session, recipient):
+    """The honest answer to "is it done yet" is "ask again", with a time to ask.
+
+    Built by committing a claimed key with no response, which is what a
+    concurrent request that has not finished looks like from outside.
+    """
+    body = _body(recipient.id)
+    await session.execute(
+        text(
+            "insert into idempotency_keys (key, endpoint, request_fingerprint)"
+            " values ('in-flight-key', 'POST /transfers', :fingerprint)"
+        ),
+        {"fingerprint": idempotency_service.fingerprint(body)},
+    )
+    await session.commit()
+
+    response = await _post(client, recipient.id, key="in-flight-key")
+    assert response.status_code == 409
+    assert response.headers.get("Retry-After") == "1"

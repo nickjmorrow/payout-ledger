@@ -69,7 +69,9 @@ export function keysToInvalidate(events: readonly ChangeEvent[]): QueryKey[] {
         break;
       }
       case 'transfers': {
-        keys.push(ledgerKeys.transfers);
+        // A run's progress is its transfers' statuses, so a transfer moving is
+        // a run moving. No topic of its own: there is nothing on a run to change.
+        keys.push(ledgerKeys.transfers, ledgerKeys.runs);
         break;
       }
     }

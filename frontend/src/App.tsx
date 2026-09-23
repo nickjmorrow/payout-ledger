@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import Column from 'src/components/Column';
-import DisburseForm from 'src/components/DisburseForm';
 import FindingList from 'src/components/FindingList';
 import LiveIndicator from 'src/components/LiveIndicator';
+import NewDisbursement from 'src/components/NewDisbursement';
 import Overview from 'src/components/Overview';
+import RunList from 'src/components/RunList';
 import ThemeToggle from 'src/components/ThemeToggle';
 import TransferList from 'src/components/TransferList';
 import useLiveUpdates from 'src/hooks/useLiveUpdates';
@@ -18,6 +20,10 @@ import useLiveUpdates from 'src/hooks/useLiveUpdates';
 export default function App() {
   // Once, for the whole page: one stream, and every query kept current by it.
   useLiveUpdates();
+  // Which payment run the transfer list is narrowed to. Here because two
+  // sections share it: choosing a run filters the list below, and creating
+  // one selects it so the operator watches the run they just authorised.
+  const [runId, setRunId] = useState<null | string>(null);
 
   return (
     <div className={'flex h-full flex-col overflow-y-auto'}>
@@ -43,14 +49,26 @@ export default function App() {
           <h2 className={'text-xs font-medium tracking-wide text-ink-muted uppercase'}>
             {'New disbursement'}
           </h2>
-          <DisburseForm />
+          <NewDisbursement onRunCreated={setRunId} />
+        </section>
+
+        <section className={'flex flex-col gap-3'}>
+          <h2 className={'text-xs font-medium tracking-wide text-ink-muted uppercase'}>
+            {'Payment runs'}
+          </h2>
+          <RunList onSelect={setRunId} selectedId={runId} />
         </section>
 
         <section className={'flex flex-col gap-3'}>
           <h2 className={'text-xs font-medium tracking-wide text-ink-muted uppercase'}>
             {'Disbursements'}
           </h2>
-          <TransferList />
+          <TransferList
+            onClearRun={() => {
+              setRunId(null);
+            }}
+            runId={runId}
+          />
         </section>
 
         <section className={'flex flex-col gap-3'}>

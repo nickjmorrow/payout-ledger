@@ -65,6 +65,7 @@ async def initiate(
     amount_minor: int,
     currency: str,
     request_id: str | None = None,
+    run_id: uuid.UUID | None = None,
 ) -> Transfer:
     """Authorise a disbursement and queue it to be sent. **Does not commit.**
 
@@ -101,6 +102,7 @@ async def initiate(
         amount_minor=amount_minor,
         currency=currency,
         status="pending",
+        run_id=run_id,
     )
     session.add(transfer)
     await session.flush()
@@ -220,8 +222,12 @@ async def get(session: AsyncSession, *, transfer_id: uuid.UUID) -> Transfer | No
     return await session.get(Transfer, transfer_id)
 
 
-async def recent(session: AsyncSession, *, limit: int = 50) -> list[Transfer]:
-    result = await session.execute(
-        select(Transfer).order_by(Transfer.created_at.desc()).limit(limit)
-    )
+async def recent(
+    session: AsyncSession, *, limit: int = 50, run_id: uuid.UUID | None = None
+) -> list[Transfer]:
+    """The newest transfers, or the newest in one run."""
+    query = select(Transfer).order_by(Transfer.created_at.desc()).limit(limit)
+    if run_id is not None:
+        query = query.where(Transfer.run_id == run_id)
+    result = await session.execute(query)
     return list(result.scalars())

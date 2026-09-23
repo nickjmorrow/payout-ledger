@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     # 422 the client can show, long before any money moves.
     max_transfer_minor: int = 1_000_000_00
 
+    # A ceiling on recipients in one payment run. A run is one transaction, so
+    # its size is how long the funding lock is held and how large one commit
+    # is; past this, split it. Refused as a 422 before anything is posted.
+    max_run_size: int = 100
+
     # Whether to seed demo recipients and an opening balance. The chart of
     # accounts is seeded regardless — no transfer can be authorised without it,
     # so that part is setup rather than sample data.

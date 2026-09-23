@@ -20,8 +20,33 @@ export interface Transfer {
   providerReference: null | string;
   recipientId: string;
   recipientName: string;
+  /** The payment run this was authorised in, or null for a one-off. */
+  runId: null | string;
   status: TransferStatus;
   updatedAt: string;
+}
+
+/**
+ * A payment run with its progress. `byStatus` and `totalMinor` are counted
+ * from the run's transfers on every read — a run has no status of its own to
+ * disagree with them.
+ */
+export interface PaymentRun {
+  byStatus: Partial<Record<TransferStatus, number>>;
+  count: number;
+  createdAt: string;
+  currency: string;
+  id: string;
+  memo: null | string;
+  totalMinor: number;
+}
+
+export interface RunRequest {
+  currency: string;
+  /** One per attempt, reused across retries. See `DisburseRequest`. */
+  idempotencyKey: string;
+  items: { amountMinor: number; recipientId: string }[];
+  memo: null | string;
 }
 
 export type TaskStatus = 'cancelled' | 'failed' | 'pending' | 'running' | 'succeeded';
@@ -116,17 +141,38 @@ export const ledgerKeys = {
   findings: ['findings'] as const,
   overview: ['overview'] as const,
   recipients: ['recipients'] as const,
+  runs: ['runs'] as const,
   tasks: ['tasks'] as const,
   transfer: (id: string) => ['transfers', id] as const,
   transfers: ['transfers'] as const,
+  /** Under `transfers`, so a change to any transfer reaches the filtered list too. */
+  transfersInRun: (runId: string) => ['transfers', 'run', runId] as const,
 };
 
 export function getOverview(): Promise<Overview> {
   return apiFetch<Overview>('/overview');
 }
 
-export function listTransfers(): Promise<Transfer[]> {
-  return apiFetch<Transfer[]>('/transfers');
+export function listTransfers(runId?: null | string): Promise<Transfer[]> {
+  const query = runId ? `?run_id=${encodeURIComponent(runId)}` : '';
+  return apiFetch<Transfer[]>(`/transfers${query}`);
+}
+
+export function listRuns(): Promise<PaymentRun[]> {
+  return apiFetch<PaymentRun[]>('/runs');
+}
+
+export function createRun({
+  currency,
+  idempotencyKey,
+  items,
+  memo,
+}: RunRequest): Promise<PaymentRun> {
+  return apiFetch<PaymentRun>('/runs', {
+    body: JSON.stringify({ currency, items, memo }),
+    headers: { 'Idempotency-Key': idempotencyKey },
+    method: 'POST',
+  });
 }
 
 export function getTransfer(id: string): Promise<TransferDetail> {

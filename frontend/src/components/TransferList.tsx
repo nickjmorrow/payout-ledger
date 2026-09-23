@@ -5,19 +5,26 @@ import { formatTime } from 'src/format';
 import useTransfers from 'src/hooks/useTransfers';
 import { formatMoney } from 'src/money';
 
+interface Props {
+  /** Show only this payment run's transfers, or everything when null. */
+  runId: null | string;
+  onClearRun: () => void;
+}
+
 /**
- * Every disbursement, newest first. Click one for its history.
+ * Disbursements, newest first — all of them, or one run's. Click one for its
+ * history.
  *
  * The recipient's name is the control rather than the whole row, because a
  * row is not a button: it cannot take focus, a screen reader will not announce
  * it as something to press, and a click on the status pill to copy a reference
  * would open a drawer instead. One real button per row costs nothing.
  */
-export default function TransferList() {
-  const { data: transfers } = useTransfers();
+export default function TransferList({ onClearRun, runId }: Props) {
+  const { data: transfers } = useTransfers(runId);
   const [selectedId, setSelectedId] = useState<null | string>(null);
 
-  if (transfers?.length === 0) {
+  if (transfers?.length === 0 && runId === null) {
     return (
       <p
         className={
@@ -31,6 +38,22 @@ export default function TransferList() {
 
   return (
     <div className={'overflow-hidden rounded-xl border border-ink/10'}>
+      {runId !== null && (
+        <div
+          className={
+            'flex items-center justify-between border-b border-ink/5 bg-surface-raised px-4 py-2 text-xs text-ink-muted'
+          }
+        >
+          <span>{`Showing one payment run · ${String(transfers?.length ?? 0)} transfers`}</span>
+          <button
+            className={'font-medium text-accent hover:underline'}
+            onClick={onClearRun}
+            type={'button'}
+          >
+            {'Show all'}
+          </button>
+        </div>
+      )}
       <table className={'w-full text-left text-sm'}>
         <thead className={'bg-surface-raised text-xs text-ink-muted'}>
           <tr>
