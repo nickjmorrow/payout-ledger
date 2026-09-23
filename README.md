@@ -45,6 +45,25 @@ The domain is small. The failures it survives are not.
 - **Write skew, prevented.** Two concurrent transfers that each check the
   balance and each see enough will both post and overdraw the fund. Every
   journal balances; no constraint objects. There is a test that reproduces it.
+- **Payment runs, all or nothing.** Pay every enrolled recipient in one
+  request: one transaction authorises every transfer or none, checked against
+  the fund for the whole total. Two workers claim the sends with `SKIP LOCKED`
+  and the console shows which worker holds which.
+- **Live updates over Server-Sent Events**, fed by `NOTIFY` from inside the
+  transaction that made each change, so the console is never told about a
+  payment it cannot yet read. A notice says *what* changed and the browser
+  re-reads it, so a lost frame costs a moment of staleness, never a wrong number.
+
+## What the console shows
+
+- **The books for any transfer.** Click a recipient to see its journal entries
+  as a bookkeeper would lay them out — debits, credits, totals that match — and
+  every attempt the worker made. A failed transfer shows the authorisation and
+  its reversal side by side; nothing was deleted.
+- **The queue as it works.** Due, scheduled, running and dead work, with the
+  worker holding each task and a countdown to the next one.
+- **The dead-letter queue, with a Retry** that refuses to re-run a payment
+  that already finished, and says why.
 
 [AGENTS.md](./AGENTS.md) is the argument behind all of it — read
 [§ The books](./AGENTS.md#the-books) before changing anything in `services/`.

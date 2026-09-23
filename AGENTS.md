@@ -301,6 +301,34 @@ error and the payload, and moving it elsewhere would only lose them.
 attempt reverses the transfer before giving up — `_handle_provider_error` in
 `worker/disburse.py`. If you add a task kind that moves money, do the same.
 
+**One path still breaks that rule, and it is known.** The sweeper dead-letters a
+task whose worker *died* on its last attempt, in SQL, knowing nothing about
+transfers — so `_handle_provider_error` never runs, and the transfer stays
+`pending` with the fund debited. Until that is fixed automatically, a person
+fixes it from the console: the dead-letter queue has a Retry.
+
+**Retry is a judgement, and `dead_letter_service` makes it.** A task about a
+transfer that already settled or was reversed is refused — running it again
+would do nothing, and would look to an operator like a second payment. A task
+about an unfinished transfer is retried, safely, because both halves check
+before acting: the handler skips a transfer that is no longer pending, and the
+provider dedupes on the transfer id. Retry extends the budget
+(`max_attempts += 3`) rather than zeroing `attempts`, so how the task got to
+the dead-letter queue stays readable. It needs no idempotency key: the row is
+locked and a task that is no longer dead is refused, so a repeat is refused,
+not doubled.
+
+### Recurring work runs once
+
+Reconciliation is one task that schedules its own successor, and every
+scheduling of it goes through `task_service.schedule_once`: a *running* pass
+counts as scheduled, and the check-then-insert is serialised by an advisory
+lock. It used to count only pending passes, and with two workers that seeded a
+second chain whenever one worker's loop looked while the other was mid-pass —
+chains that then ran side by side forever. One duplicate pass is harmless; a
+duplicate chain grows without bound. It was spotted on the console's queue
+panel. Recurring work you add goes through `schedule_once` too.
+
 ### Asking, not waiting
 
 `settle_transfer` polls and reschedules itself while the answer is still
@@ -426,6 +454,7 @@ backend/app/
     ledger_service.py        Posting, balances, the chart of accounts.
     transfer_service.py      The disbursement lifecycle.
     run_service.py           Payment runs: many transfers, one decision.
+    dead_letter_service.py   Whether a dead-lettered task may run again.
     idempotency_service.py   Making a repeated request one request.
     reconciliation_service.py  Comparing our books to the provider's.
     recipient_service.py     Recipients.
@@ -452,6 +481,7 @@ frontend/src/
   polling.ts           The fallback refetch cadence. No React.
   labels.ts            Schema identifiers as words. No React.
   runs.ts              A payment run's progress, in words. No React.
+  queue.ts             What an unfinished task is doing, in a phrase. No React.
   format.ts            Timestamps and durations. No React.
   hooks/               Stateful logic that isn't layout. One hook per file.
   components/          UI. One per file, default export, named after the file.
@@ -673,6 +703,7 @@ each one needs already exists.
 | Multi-currency | A second programme | Accounts and journals are already per-currency; what is missing is an FX leg, not a column |
 | Webhooks from the provider | Polling latency actually bothers somebody | `settle_transfer` already does the work; a webhook would just call it sooner |
 | Approval workflow | Disbursements need a second pair of eyes | `pending` already means "authorised, not sent" |
+| Recording a decision on a reported finding | Reported findings happen outside chaos testing | Findings are append-only facts; a decision is a second fact about one, not an edit — and for most kinds the real resolution is a correcting journal, which deserves its own design |
 
 **Delete a row the day it stops being true.** A stale "deliberately missing"
 entry is worse than no table: it is the document telling you not to look.
