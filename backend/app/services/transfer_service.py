@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.bus import announce
 from app.logging import get_logger
 from app.models import Recipient, Transfer
+from app.money import format_money
 from app.services import ledger_service, task_service
 from app.services.ledger_service import Posting
 
@@ -76,7 +77,7 @@ async def initiate(
     """
     recipient = await session.get(Recipient, recipient_id)
     if recipient is None:
-        raise UnknownRecipientError(f"no recipient {recipient_id}")
+        raise UnknownRecipientError("No such recipient.")
 
     funding = await ledger_service.system_account(
         session, kind="program_funding", currency=currency
@@ -90,7 +91,8 @@ async def initiate(
     available = await ledger_service.balance(session, account_id=funding.id)
     if available < amount_minor:
         raise InsufficientFundsError(
-            f"program fund holds {available} {currency} minor units; {amount_minor} requested"
+            f"The program fund holds {format_money(available, currency)}, "
+            f"and this payment is {format_money(amount_minor, currency)}."
         )
 
     payable = await ledger_service.payable_account(

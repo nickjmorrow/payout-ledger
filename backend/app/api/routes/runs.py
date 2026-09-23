@@ -75,7 +75,9 @@ async def create(
 
     summary = await run_service.summary(session, run_id=run.id)
     if summary is None:  # pragma: no cover - the run was flushed just above
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "run vanished")
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, "The run was not found after it was created."
+        )
     out = _out(summary)
 
     await idempotency_service.record_response(

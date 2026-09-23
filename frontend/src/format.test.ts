@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatRelative } from 'src/format';
+import { formatPhone, formatRelative } from 'src/format';
 
 // `formatTime` and `formatClock` are deliberately untested: they format in the
 // reader's locale and zone, so any assertion here is an assertion about the
@@ -23,5 +23,15 @@ describe('formatRelative', () => {
   it('switches to minutes at a minute', () => {
     expect(formatRelative(at(60_000), now)).toBe('in 1m');
     expect(formatRelative(at(-150_000), now)).toBe('3m ago');
+  });
+});
+
+describe('formatPhone', () => {
+  it('reads a US number the way it is said', () => {
+    expect(formatPhone('+12025550101')).toBe('(202) 555-0101');
+  });
+
+  it('leaves any other number as stored', () => {
+    expect(formatPhone('+254700000101')).toBe('+254700000101');
   });
 });

@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { ledgerKeys, listRecipients } from 'src/api/ledger';
+import PrimaryButton from 'src/components/PrimaryButton';
 import Skeleton from 'src/components/Skeleton';
+import TextInput from 'src/components/TextInput';
 import useCreateRun from 'src/hooks/useCreateRun';
 import { formatMoney, parseMajor } from 'src/money';
 
@@ -124,10 +126,8 @@ export default function RunForm({ onCreated }: Props) {
           <label className={'block text-xs text-ink-muted'} htmlFor={amountField}>
             {`Amount each (${CURRENCY})`}
           </label>
-          <input
-            className={
-              'mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink tabular-nums'
-            }
+          <TextInput
+            className={'tabular-nums'}
             id={amountField}
             inputMode={'decimal'}
             onChange={(event) => {
@@ -140,10 +140,7 @@ export default function RunForm({ onCreated }: Props) {
           <label className={'block text-xs text-ink-muted'} htmlFor={memoField}>
             {'Memo (optional)'}
           </label>
-          <input
-            className={
-              'mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink'
-            }
+          <TextInput
             id={memoField}
             maxLength={200}
             onChange={(event) => {
@@ -161,19 +158,13 @@ export default function RunForm({ onCreated }: Props) {
             ? 'Choose recipients and an amount'
             : `Total ${formatMoney(totalMinor, CURRENCY)}`}
         </span>
-        <button
-          className={
-            'rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent transition hover:opacity-90 disabled:opacity-40'
-          }
-          disabled={!canSubmit}
-          type={'submit'}
-        >
+        <PrimaryButton disabled={!canSubmit}>
           {isPending ? 'Authorizing…' : `Authorize ${String(selected.size)} payments`}
-        </button>
+        </PrimaryButton>
       </div>
 
       {error && (
-        <p className={'text-xs text-danger'} role={'alert'}>
+        <p className={'text-sm text-danger'} role={'alert'}>
           {error.message}
         </p>
       )}

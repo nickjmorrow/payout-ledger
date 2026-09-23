@@ -26,16 +26,26 @@ export class ApiError extends Error {
 /**
  * The human-readable message out of an error response.
  *
- * FastAPI puts it in `detail` — but only for `HTTPException`. A 422 from
- * request validation puts an *array* of per-field errors there instead, and a
- * failure from in front of the app (a proxy, a dead upstream) has no JSON at
- * all. Anything that is not a plain string falls back to the status text,
- * because `[object Object]` in an error banner is worse than "Bad Request".
+ * FastAPI puts it in `detail` in two shapes: a string for an `HTTPException`,
+ * and an *array* of per-field errors for a request that failed validation —
+ * which is where the per-payment cap is refused, so the array is read too,
+ * not skipped. A failure from in front of the app (a proxy, a dead upstream)
+ * has no JSON at all, and over HTTP/2 no status text either, so the last
+ * resort names the status rather than showing an empty banner.
  */
 export async function errorDetail(response: Response): Promise<string> {
   const body: unknown = await response.json().catch(() => null);
   const detail = (body as { detail?: unknown } | null)?.detail;
-  return typeof detail === 'string' ? detail : response.statusText;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item: unknown) => (item as { msg?: unknown }).msg)
+      .filter((msg): msg is string => typeof msg === 'string')
+      // Pydantic prefixes a validator's own message with its category.
+      .map((msg) => msg.replace(/^Value error, /, ''));
+    if (messages.length > 0) return messages.join('; ');
+  }
+  return response.statusText || `Request failed (${String(response.status)})`;
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {

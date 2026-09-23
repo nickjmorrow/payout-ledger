@@ -125,7 +125,7 @@ async def test_a_run_larger_than_the_fund_is_refused_with_the_total(
     response = await _post(client, _body(people, amount=4_000_00))
     assert response.status_code == 422
     detail = response.json()["detail"]
-    assert "this run totals 1200000" in detail
+    assert "This run totals KES 12,000.00" in detail
     assert "across 3 recipients" in detail
     assert await _count(session, Transfer) == 0
 

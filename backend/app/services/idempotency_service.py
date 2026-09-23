@@ -129,17 +129,17 @@ async def claim(
     # back with the transfer's 201.
     if existing.endpoint != endpoint:
         raise KeyConflictError(
-            f"idempotency key {key!r} was used for {existing.endpoint!r}, not {endpoint!r}"
+            f"This idempotency key was used for {existing.endpoint}, not {endpoint}."
         )
 
     if existing.request_fingerprint != digest:
         raise KeyConflictError(
-            f"idempotency key {key!r} was already used for a different request body; "
-            "reusing a key with new content would silently discard this request"
+            "This idempotency key was already used for a different request body. "
+            "Reusing a key with new content would silently discard this request."
         )
 
     if existing.response_status is None:
-        raise InFlightError(f"idempotency key {key!r} is still being processed; retry shortly")
+        raise InFlightError("This request is still being processed. Retry shortly.")
 
     logger.info("idempotency key replayed", key=key, endpoint=endpoint)
     return Replay(

@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useRef } from 'react';
-import { disburse, ledgerKeys } from 'src/api/ledger';
+import { disburse, ledgerKeys, type Transfer } from 'src/api/ledger';
 
 export interface Disburse {
   error: Error | null;
@@ -23,7 +23,7 @@ export interface Disburse {
  * than state because nothing renders differently for it, and re-rendering on
  * every keystroke to hold a uuid would be the wrong trade.
  */
-export default function useDisburse(): Disburse {
+export default function useDisburse(onDisbursed?: (transfer: Transfer) => void): Disburse {
   const queryClient = useQueryClient();
   const key = useRef<string>(crypto.randomUUID());
 
@@ -37,10 +37,11 @@ export default function useDisburse(): Disburse {
       currency: string;
       recipientId: string;
     }) => disburse({ amountMinor, currency, idempotencyKey: key.current, recipientId }),
-    onSuccess: async () => {
+    onSuccess: async (transfer) => {
       // A new disbursement from here on: this one is done, and reusing the key
       // would replay it forever.
       key.current = crypto.randomUUID();
+      onDisbursed?.(transfer);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ledgerKeys.transfers }),
         queryClient.invalidateQueries({ queryKey: ledgerKeys.overview }),

@@ -346,3 +346,12 @@ async def test_the_queued_payment_carries_the_request_that_asked_for_it(client, 
         text("select request_id from tasks where kind = 'disburse_transfer'")
     )
     assert stored.scalar_one() == "trace-me-123"
+
+
+@pytest.mark.usefixtures("chart")
+async def test_the_per_payment_cap_is_refused_in_words(client, recipient):
+    """The console shows this message as it is, so it has to read as one."""
+    response = await _post(client, recipient.id, amount=1_000_000_01)
+    assert response.status_code == 422
+    [error] = response.json()["detail"]
+    assert "A single payment is capped at KES 1,000,000.00." in error["msg"]

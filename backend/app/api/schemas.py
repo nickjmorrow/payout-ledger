@@ -15,10 +15,11 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.config import settings
 from app.models import Task
+from app.money import format_money
 from app.wire import ApiSchema
 
 
@@ -184,9 +185,16 @@ class OverviewOut(ApiSchema):
     dead_lettered: int
 
 
+def _within_cap(amount_minor: int, currency: str) -> None:
+    """The per-payment ceiling, refused in words the console can show as they are."""
+    if amount_minor > settings.max_transfer_minor:
+        cap = format_money(settings.max_transfer_minor, currency)
+        raise ValueError(f"A single payment is capped at {cap}.")
+
+
 class RunItemIn(ApiSchema):
     recipient_id: UUID
-    amount_minor: int = Field(gt=0, le=settings.max_transfer_minor)
+    amount_minor: int = Field(gt=0)
 
 
 class RunIn(ApiSchema):
@@ -196,11 +204,22 @@ class RunIn(ApiSchema):
     currency: str = Field(min_length=3, max_length=3)
     memo: str | None = Field(default=None, max_length=200)
 
+    @model_validator(mode="after")
+    def _items_within_cap(self) -> "RunIn":
+        for item in self.items:
+            _within_cap(item.amount_minor, self.currency)
+        return self
+
 
 class TransferIn(ApiSchema):
     recipient_id: UUID
     # `gt=0` here as well as a CHECK in the database. This one produces a 422
     # the client can show; the CHECK is what makes it true regardless of who is
     # writing. Neither makes the other redundant.
-    amount_minor: int = Field(gt=0, le=settings.max_transfer_minor)
+    amount_minor: int = Field(gt=0)
     currency: str = Field(min_length=3, max_length=3)
+
+    @model_validator(mode="after")
+    def _amount_within_cap(self) -> "TransferIn":
+        _within_cap(self.amount_minor, self.currency)
+        return self

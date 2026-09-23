@@ -45,3 +45,13 @@ export function formatRelative(iso: string, now: number): string {
       : `${String(Math.round(magnitude / MINUTE_MS))}m`;
   return delta > 0 ? `in ${span}` : `${span} ago`;
 }
+
+/**
+ * `+12025550101` -> `"(202) 555-0101"`. A US number reads the way it is said;
+ * anything else is shown as stored, because guessing another country's
+ * grouping is worse than not grouping.
+ */
+export function formatPhone(msisdn: string): string {
+  const us = /^\+1(\d{3})(\d{3})(\d{4})$/.exec(msisdn);
+  return us ? `(${us[1] ?? ''}) ${us[2] ?? ''}-${us[3] ?? ''}` : msisdn;
+}

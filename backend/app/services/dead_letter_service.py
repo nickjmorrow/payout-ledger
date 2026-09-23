@@ -58,7 +58,9 @@ async def retry(session: AsyncSession, *, task_id: uuid.UUID) -> Task:
     """
     task = await session.get(Task, task_id, with_for_update=True)
     if task is None or task.status != "failed":
-        raise NotDeadLetteredError(f"task {task_id} is not in the dead-letter queue")
+        raise NotDeadLetteredError(
+            "This task is not in the dead-letter queue; it may already have been retried."
+        )
 
     raw = task.payload.get("transfer_id")
     if isinstance(raw, str):
@@ -66,7 +68,7 @@ async def retry(session: AsyncSession, *, task_id: uuid.UUID) -> Task:
         if transfer is not None and transfer.status in FINISHED:
             what = "was paid" if transfer.status == "succeeded" else "was reversed"
             raise AlreadyFinishedError(
-                f"the transfer this task was about {what}, so running it again would do "
+                f"The transfer this task was about {what}, so running it again would do "
                 "nothing. To pay this recipient, authorize a new disbursement."
             )
 

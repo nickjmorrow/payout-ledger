@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.logging import get_logger
 from app.models import PaymentRun, Transfer
+from app.money import format_money
 from app.services import ledger_service, transfer_service
 
 logger = get_logger(__name__)
@@ -78,14 +79,12 @@ async def initiate(
 ) -> PaymentRun:
     """Authorise every transfer in a run, or none. **Does not commit.**"""
     if not items:
-        raise EmptyRunError("a payment run needs at least one recipient")
+        raise EmptyRunError("A payment run needs at least one recipient.")
 
     seen: set[uuid.UUID] = set()
     for item in items:
         if item.recipient_id in seen:
-            raise DuplicateRecipientError(
-                f"recipient {item.recipient_id} appears more than once in this run"
-            )
+            raise DuplicateRecipientError("A recipient appears more than once in this run.")
         seen.add(item.recipient_id)
 
     total = sum(item.amount_minor for item in items)
@@ -100,8 +99,8 @@ async def initiate(
     available = await ledger_service.balance(session, account_id=funding.id)
     if available < total:
         raise transfer_service.InsufficientFundsError(
-            f"this run totals {total} {currency} minor units across {len(items)} recipients; "
-            f"the program fund holds {available}"
+            f"This run totals {format_money(total, currency)} across {len(items)} recipients, "
+            f"and the program fund holds {format_money(available, currency)}."
         )
 
     run = PaymentRun(memo=memo, currency=currency)

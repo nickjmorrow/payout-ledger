@@ -143,7 +143,7 @@ async def get_transfer(
     """
     transfer = await transfer_service.get(session, transfer_id=transfer_id)
     if transfer is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such transfer")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such transfer.")
     await session.refresh(transfer, ["recipient"])
 
     journals = await ledger_service.journals_for_transfer(session, transfer_id=transfer_id)
