@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import Column from 'src/components/Column';
+import DeadLetterList from 'src/components/DeadLetterList';
 import FindingList from 'src/components/FindingList';
 import LiveIndicator from 'src/components/LiveIndicator';
 import NewDisbursement from 'src/components/NewDisbursement';
 import Overview from 'src/components/Overview';
+import QueuePanel from 'src/components/QueuePanel';
 import RunList from 'src/components/RunList';
 import ThemeToggle from 'src/components/ThemeToggle';
 import TransferList from 'src/components/TransferList';
@@ -76,6 +78,20 @@ export default function App() {
             {'Reconciliation'}
           </h2>
           <FindingList />
+        </section>
+
+        <section className={'flex flex-col gap-3'}>
+          <h2 className={'text-xs font-medium tracking-wide text-ink-muted uppercase'}>
+            {'Queue'}
+          </h2>
+          <QueuePanel />
+        </section>
+
+        <section className={'flex flex-col gap-3'}>
+          <h2 className={'text-xs font-medium tracking-wide text-ink-muted uppercase'}>
+            {'Dead letters'}
+          </h2>
+          <DeadLetterList />
         </section>
       </Column>
     </div>

@@ -82,6 +82,19 @@ export interface Journal {
   memo: null | string;
 }
 
+/**
+ * The queue right now. `due` and `scheduled` are both pending work, split on
+ * whether it may run yet — a settlement check a few seconds out is not a
+ * backlog.
+ */
+export interface QueueSnapshot {
+  active: Task[];
+  dead: number;
+  due: number;
+  running: number;
+  scheduled: number;
+}
+
 /** A transfer with its two histories: the books' account and the worker's. */
 export interface TransferDetail extends Transfer {
   journals: Journal[];
@@ -138,8 +151,12 @@ export interface DisburseRequest {
  * member: `['transfers']` covers the list and every `['transfers', id]`.
  */
 export const ledgerKeys = {
+  /** Under `tasks`, so every task notice reaches it. */
+  deadLetters: ['tasks', 'dead'] as const,
   findings: ['findings'] as const,
   overview: ['overview'] as const,
+  /** Under `tasks`, so every task notice reaches it. */
+  queue: ['tasks', 'queue'] as const,
   recipients: ['recipients'] as const,
   runs: ['runs'] as const,
   tasks: ['tasks'] as const,
@@ -198,4 +215,20 @@ export function disburse({
     headers: { 'Idempotency-Key': idempotencyKey },
     method: 'POST',
   });
+}
+
+export function getQueue(): Promise<QueueSnapshot> {
+  return apiFetch<QueueSnapshot>('/queue');
+}
+
+export function listDeadLetters(): Promise<Task[]> {
+  return apiFetch<Task[]>('/dead-letters');
+}
+
+/**
+ * Put a dead-lettered task back on the queue. No idempotency key: the server
+ * refuses a task that is no longer dead, so a repeat is refused, not doubled.
+ */
+export function retryDeadLetter(taskId: string): Promise<Task> {
+  return apiFetch<Task>(`/dead-letters/${taskId}/retry`, { method: 'POST' });
 }

@@ -16,10 +16,11 @@ bookkeeping.
 """
 
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import exists, func, select, text
+from sqlalchemy import and_, exists, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bus import announce, publish
@@ -347,6 +348,83 @@ async def for_transfer(session: AsyncSession, *, transfer_id: uuid.UUID) -> list
         .order_by(Task.created_at)
     )
     return list(result.scalars())
+
+
+@dataclass(frozen=True)
+class QueueCounts:
+    """The queue at a glance.
+
+    `due` and `scheduled` are both `pending`, split on `run_at`: work a worker
+    would claim right now, and work that is deliberately waiting — a settlement
+    check a few seconds out, a retry backing off, the next reconciliation pass.
+    Lumping them together would make a healthy queue with a dozen scheduled
+    checks look like a backlog.
+    """
+
+    due: int
+    scheduled: int
+    running: int
+    dead: int
+
+
+async def counts(session: AsyncSession) -> QueueCounts:
+    """One pass over the table, four FILTERed counts."""
+    pending = Task.status == "pending"
+    row = (
+        await session.execute(
+            select(
+                func.count().filter(and_(pending, Task.run_at <= func.now())),
+                func.count().filter(and_(pending, Task.run_at > func.now())),
+                func.count().filter(Task.status == "running"),
+                func.count().filter(Task.status == "failed"),
+            )
+        )
+    ).one()
+    return QueueCounts(due=row[0], scheduled=row[1], running=row[2], dead=row[3])
+
+
+async def active(session: AsyncSession, *, limit: int = 50) -> list[Task]:
+    """Everything not yet finished — running, due, and scheduled — soonest first."""
+    result = await session.execute(
+        select(Task)
+        .where(Task.status.in_(("pending", "running")))
+        .order_by(Task.run_at)
+        .limit(limit)
+    )
+    return list(result.scalars())
+
+
+async def requeue(session: AsyncSession, *, task: Task, extra_attempts: int = 3) -> None:
+    """Put a dead-lettered task back on the queue with a fresh budget. **Does not commit.**
+
+    The budget is extended rather than reset: `max_attempts` rises by
+    `extra_attempts` and `attempts` is left alone, so a task that failed three
+    times and was retried reads 3 of 6, not 0 of 3. The history of how it got
+    to the dead-letter queue is the most useful thing about it, and zeroing the
+    count would erase it. `error` is kept for the same reason, until a new
+    outcome replaces it.
+
+    Whether a task *should* be retried is not decided here. See
+    `dead_letter_service.retry`, which knows what a task is about.
+    """
+    task.status = "pending"
+    task.max_attempts = task.attempts + extra_attempts
+    task.claimed_at = None
+    task.claimed_by = None
+    task.run_at = func.now()
+    task.updated_at = func.now()
+    await session.flush()
+    # The two `now()`s above are expired by the flush, and reading an expired
+    # attribute from async code is implicit IO. Reload them explicitly.
+    await session.refresh(task)
+    await publish(session, WAKE_CHANNEL, {"task_id": str(task.id)})
+    await _announce(session, task_id=task.id, transfer_id=task.payload.get("transfer_id"))
+    logger.info(
+        "task requeued",
+        task_id=str(task.id),
+        attempts=task.attempts,
+        max_attempts=task.max_attempts,
+    )
 
 
 async def pending_count(session: AsyncSession, *, kind: str) -> int:

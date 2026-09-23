@@ -67,6 +67,16 @@ class TaskOut(ApiSchema):
         )
 
 
+class QueueOut(ApiSchema):
+    """The queue right now: how much of each kind of work, and what it is."""
+
+    due: int
+    scheduled: int
+    running: int
+    dead: int
+    active: list[TaskOut]
+
+
 class TransferOut(ApiSchema):
     id: UUID
     recipient_id: UUID

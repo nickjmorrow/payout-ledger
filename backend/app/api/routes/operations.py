@@ -6,7 +6,9 @@ from the entries, the findings from the reconciliation pass, the dead letters
 from the queue.
 """
 
-from fastapi import APIRouter
+import uuid
+
+from fastapi import APIRouter, HTTPException, status
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
@@ -14,10 +16,12 @@ from app.api.schemas import (
     ApiResponse,
     FindingOut,
     OverviewOut,
+    QueueOut,
     RecipientOut,
     TaskOut,
 )
 from app.services import (
+    dead_letter_service,
     ledger_service,
     recipient_service,
     reconciliation_service,
@@ -38,7 +42,7 @@ async def overview(session: DbSession, _user: CurrentUser) -> ApiResponse[Overvi
     """
     accounts = await _system_accounts(session)
     findings = await reconciliation_service.recent_findings(session)
-    dead = await task_service.dead_lettered(session)
+    queue = await task_service.counts(session)
 
     return ApiResponse(
         data=OverviewOut(
@@ -48,7 +52,9 @@ async def overview(session: DbSession, _user: CurrentUser) -> ApiResponse[Overvi
             # has gone missing and the only way anyone finds out is by looking.
             trial_balance_minor=await ledger_service.trial_balance(session),
             unresolved_findings=sum(1 for f in findings if not f.healed),
-            dead_lettered=len(dead),
+            # A count, not the length of the dead-letter listing, which is
+            # capped: past fifty it would quietly stop going up.
+            dead_lettered=queue.dead,
         )
     )
 
@@ -82,6 +88,40 @@ async def list_dead_letters(session: DbSession, _user: CurrentUser) -> ApiRespon
     """
     tasks = await task_service.dead_lettered(session)
     return ApiResponse(data=[TaskOut.from_task(t) for t in tasks])
+
+
+@router.post("/dead-letters/{task_id}/retry")
+async def retry_dead_letter(
+    task_id: uuid.UUID, session: DbSession, _user: CurrentUser
+) -> ApiResponse[TaskOut]:
+    """Put a dead-lettered task back on the queue, if it is still worth running.
+
+    No idempotency key, and none needed: the service refuses a task that is no
+    longer dead, so a repeated request is refused rather than doubled. See
+    `dead_letter_service` for which tasks are refused and why.
+    """
+    try:
+        task = await dead_letter_service.retry(session, task_id=task_id)
+    except dead_letter_service.DeadLetterError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await session.commit()
+    return ApiResponse(data=TaskOut.from_task(task))
+
+
+@router.get("/queue")
+async def queue(session: DbSession, _user: CurrentUser) -> ApiResponse[QueueOut]:
+    """What the workers have to do: counts, and the unfinished work itself."""
+    counts = await task_service.counts(session)
+    active = await task_service.active(session)
+    return ApiResponse(
+        data=QueueOut(
+            due=counts.due,
+            scheduled=counts.scheduled,
+            running=counts.running,
+            dead=counts.dead,
+            active=[TaskOut.from_task(t) for t in active],
+        )
+    )
 
 
 async def _system_accounts(session: DbSession) -> list[AccountOut]:
