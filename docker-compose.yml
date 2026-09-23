@@ -146,6 +146,7 @@ services:
     volumes:
       - ./frontend/src:/srv/src:ro
       - ./frontend/index.html:/srv/index.html:ro
+      - ./frontend/public:/srv/public:ro
     depends_on:
       - backend
 
