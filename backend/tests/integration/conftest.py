@@ -25,12 +25,15 @@ import asyncio
 from pathlib import Path
 
 import asyncpg
+import httpx
 import pytest
 from alembic.config import Config
 from sqlalchemy import text
 
 from alembic import command
+from app.bus import bus
 from app.db import SessionFactory, engine
+from app.main import app
 from app.models import Base
 from tests.conftest import ADMIN_DSN, TEST_DB
 
@@ -100,3 +103,15 @@ async def session():
     """
     async with SessionFactory() as session:
         yield session
+
+
+@pytest.fixture
+async def client():
+    """The app over ASGI, with the bus started as the lifespan would."""
+    await bus.start()
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as c:
+            yield c
+    finally:
+        await bus.stop()

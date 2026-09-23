@@ -5,19 +5,15 @@ when it is refused: a retry that re-ran a finished payment's task would at best
 do nothing and at worst tell an operator a payment had been sent again.
 """
 
-import httpx
 import pytest
 from sqlalchemy import text
 
-from app.bus import bus
 from app.config import settings
-from app.main import app
-from app.models import Account, Recipient
 from app.provider.mock import MockProvider
-from app.services import ledger_service, task_service, transfer_service
-from app.services.ledger_service import Posting
+from app.services import task_service, transfer_service
 from app.worker import disburse
 from app.worker.handlers import execute
+from tests.support.program import enroll, open_program
 
 KES = "KES"
 FUND = 100_000_00
@@ -35,34 +31,9 @@ def settle_immediately(monkeypatch):
 
 
 @pytest.fixture
-async def client():
-    await bus.start()
-    try:
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as c:
-            yield c
-    finally:
-        await bus.stop()
-
-
-@pytest.fixture
 async def recipient(session):
-    fund = Account(name="Fund", kind="program_funding", currency=KES)
-    float_ = Account(name="Float", kind="provider_settlement", currency=KES)
-    person = Recipient(full_name="Asha Mwangi", msisdn="+254700000001", country="KE")
-    session.add_all([fund, float_, person])
-    await session.flush()
-    await ledger_service.post(
-        session,
-        kind="funding_deposit",
-        currency=KES,
-        postings=[
-            Posting(account_id=float_.id, direction="debit", amount_minor=FUND),
-            Posting(account_id=fund.id, direction="credit", amount_minor=FUND),
-        ],
-    )
-    await session.commit()
-    return person
+    await open_program(session, fund_minor=FUND)
+    return await enroll(session)
 
 
 async def _dead(session, task_id, *, attempts=3):

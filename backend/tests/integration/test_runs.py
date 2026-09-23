@@ -10,17 +10,14 @@ import asyncio
 import uuid
 from typing import Any
 
-import httpx
 import pytest
 from sqlalchemy import func, select, text
 
-from app.bus import bus
 from app.db import SessionFactory
-from app.main import app
-from app.models import Account, PaymentRun, Recipient, Transfer
+from app.models import PaymentRun, Recipient, Transfer
 from app.services import ledger_service, run_service, transfer_service
-from app.services.ledger_service import Posting
 from app.services.run_service import RunItem
+from tests.support.program import open_program
 
 KES = "KES"
 FUND = 10_000_00
@@ -28,32 +25,8 @@ EACH = 2_500_00
 
 
 @pytest.fixture
-async def client():
-    await bus.start()
-    try:
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as c:
-            yield c
-    finally:
-        await bus.stop()
-
-
-@pytest.fixture
 async def funding(session):
-    fund = Account(name="Fund", kind="program_funding", currency=KES)
-    float_ = Account(name="Float", kind="provider_settlement", currency=KES)
-    session.add_all([fund, float_])
-    await session.flush()
-    await ledger_service.post(
-        session,
-        kind="funding_deposit",
-        currency=KES,
-        postings=[
-            Posting(account_id=float_.id, direction="debit", amount_minor=FUND),
-            Posting(account_id=fund.id, direction="credit", amount_minor=FUND),
-        ],
-    )
-    await session.commit()
+    fund, _ = await open_program(session, fund_minor=FUND)
     return fund
 
 

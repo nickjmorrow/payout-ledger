@@ -21,7 +21,7 @@ from sqlalchemy import select, text
 from app import seed
 from app.config import settings
 from app.db import SessionFactory
-from app.models import Account, Recipient, ReconciliationFinding, Transfer
+from app.models import Recipient, ReconciliationFinding, Transfer
 from app.provider.mock import MockProvider
 from app.services import (
     ledger_service,
@@ -29,9 +29,9 @@ from app.services import (
     task_service,
     transfer_service,
 )
-from app.services.ledger_service import Posting
 from app.worker import reconcile
 from app.worker.handlers import execute
+from tests.support.program import enroll, open_program
 
 KES = "KES"
 FUND = 100_000_00
@@ -49,22 +49,8 @@ def provider() -> MockProvider:
 
 @pytest.fixture
 async def funded(session):
-    funding = Account(name="Fund", kind="program_funding", currency=KES)
-    settlement = Account(name="Float", kind="provider_settlement", currency=KES)
-    recipient = Recipient(full_name="Asha Mwangi", msisdn="+254700000001", country="KE")
-    session.add_all([funding, settlement, recipient])
-    await session.flush()
-    await ledger_service.post(
-        session,
-        kind="funding_deposit",
-        currency=KES,
-        postings=[
-            Posting(account_id=settlement.id, direction="debit", amount_minor=FUND),
-            Posting(account_id=funding.id, direction="credit", amount_minor=FUND),
-        ],
-    )
-    await session.commit()
-    return funding, settlement, recipient
+    funding, settlement = await open_program(session, fund_minor=FUND)
+    return funding, settlement, await enroll(session)
 
 
 async def _transfer(session, recipient, *, amount=2_500_00) -> Transfer:

@@ -14,9 +14,8 @@ import pytest
 
 from app.api.routes import events
 from app.bus import EVENTS_CHANNEL, bus
-from app.models import Account, Recipient
-from app.services import ledger_service, task_service, transfer_service
-from app.services.ledger_service import Posting
+from app.services import task_service, transfer_service
+from tests.support.program import enroll, open_program
 
 KES = "KES"
 
@@ -33,22 +32,8 @@ async def listening():
 
 @pytest.fixture
 async def recipient(session):
-    funding = Account(name="Fund", kind="program_funding", currency=KES)
-    settlement = Account(name="Float", kind="provider_settlement", currency=KES)
-    person = Recipient(full_name="Asha Mwangi", msisdn="+254700000001", country="KE")
-    session.add_all([funding, settlement, person])
-    await session.flush()
-    await ledger_service.post(
-        session,
-        kind="funding_deposit",
-        currency=KES,
-        postings=[
-            Posting(account_id=settlement.id, direction="debit", amount_minor=100_000_00),
-            Posting(account_id=funding.id, direction="credit", amount_minor=100_000_00),
-        ],
-    )
-    await session.commit()
-    return person
+    await open_program(session)
+    return await enroll(session)
 
 
 async def _drain(queue: asyncio.Queue, *, settle: float = 0.3) -> list[dict]:
