@@ -123,7 +123,12 @@ services:
       target: production
     restart: unless-stopped
     ports:
-      - '${PUBLIC_PORT:-80}:80'
+      # The interface is a variable as well as the port. With a TLS proxy on the
+      # same host (Caddy, as scripts/deploy.sh sets up) this must be 127.0.0.1:
+      # published on 0.0.0.0, the plain-HTTP port stays reachable from outside
+      # even behind a firewall, because Docker writes its own iptables rules
+      # ahead of ufw's.
+      - '${PUBLIC_BIND_ADDRESS:-0.0.0.0}:${PUBLIC_PORT:-80}:80'
     depends_on:
       backend:
         condition: service_healthy

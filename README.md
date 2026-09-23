@@ -143,9 +143,30 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up --build -d
 | Reload | Hot, with source mounts | None; the image is the artifact |
 | Backend user | root | Unprivileged `app` (uid 10001) |
 | Healthchecks | db only | All four, worker included |
+| Workers | One | Two, so `SKIP LOCKED` is contended for real |
 | Postgres port | Published on 5434 | Not published at all |
 | Demo data | Seeded | Off — the chart of accounts only |
 | Logs | Human-readable | JSON |
+
+### The public demo
+
+```bash
+scripts/deploy.sh root@203.0.113.5 ledger.203-0-113-5.sslip.io
+```
+
+One server over SSH, safe to re-run. It installs Docker and Caddy, writes a
+`.env.prod` with a generated password and demo data on, builds, puts Caddy in
+front for HTTPS (with `flush_interval -1`, or the live updates arrive in lumps),
+and publishes nginx on `127.0.0.1` only — on `0.0.0.0` the plain-HTTP port would
+be reachable past the firewall, because Docker writes its own iptables rules.
+Everything it creates is named after the app, so it shares a server with other
+projects deployed the same way.
+
+**The demo resets every night at 04:17.** The console has no accounts, so anyone
+can authorise payments. `scripts/reset-demo.sh` drops this project's database
+volume and brings it back freshly seeded — and refuses to run unless `.env.prod`
+says `SEED_DEMO_DATA=true`, which is the only thing between a cron line and
+deleting a real programme's books every night.
 
 **The nginx proxy is not decoration.** The client calls `/api` on its own origin,
 and in development Vite's dev server proxies that to the backend — a `server:`
