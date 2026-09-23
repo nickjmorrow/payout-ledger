@@ -427,6 +427,46 @@ async def requeue(session: AsyncSession, *, task: Task, extra_attempts: int = 3)
     )
 
 
+async def schedule_once(
+    session: AsyncSession,
+    *,
+    kind: str,
+    run_at: datetime,
+    request_id: str | None = None,
+    successor_of: uuid.UUID | None = None,
+) -> Task | None:
+    """Enqueue `kind` unless one is already scheduled or running. **Does not commit.**
+
+    For work that should exist exactly once — a recurring job's next run. Two
+    things make "exactly once" true, and a pending count alone had neither:
+
+    **A running task counts.** It is about to schedule its own successor, so a
+    second chain seeded while it runs is a second chain forever. With one
+    worker that window never mattered; with two, one worker's loop fell into
+    it while the other ran the pass.
+
+    **The check and the insert are serialised** by a transaction-scoped
+    advisory lock keyed on the kind, released at the caller's COMMIT or
+    ROLLBACK. Without it, two workers starting together both count zero and
+    both insert. The lock is the only coordination, not a column or a table,
+    because there is nothing to store: the rows already are the answer.
+
+    `successor_of` is the task asking on its own behalf. It is running, and must
+    not count as the thing it is scheduling. And because it asks under the
+    same lock, a chain that finds another already pending does not continue —
+    so duplicate chains, from before this existed, fold into one.
+    """
+    await session.execute(
+        text("select pg_advisory_xact_lock(hashtext(:key))"), {"key": f"schedule_once:{kind}"}
+    )
+    query = select(func.count()).where(Task.kind == kind, Task.status.in_(("pending", "running")))
+    if successor_of is not None:
+        query = query.where(Task.id != successor_of)
+    if (await session.execute(query)).scalar_one() > 0:
+        return None
+    return await enqueue(session, kind=kind, run_at=run_at, request_id=request_id)
+
+
 async def pending_count(session: AsyncSession, *, kind: str) -> int:
     result = await session.execute(
         select(func.count()).select_from(Task).where(Task.kind == kind, Task.status == "pending")

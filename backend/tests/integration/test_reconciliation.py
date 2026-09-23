@@ -11,6 +11,7 @@ report. Healing the wrong one silently moves money on the strength of a single
 disagreement.
 """
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -18,6 +19,7 @@ from sqlalchemy import select, text
 
 from app import seed
 from app.config import settings
+from app.db import SessionFactory
 from app.models import Account, Recipient, ReconciliationFinding, Transfer
 from app.provider.mock import MockProvider
 from app.services import (
@@ -355,3 +357,52 @@ async def test_seeding_twice_does_not_fund_the_programme_twice(session):
     recipients = await session.execute(select(Recipient))
     assert len(recipients.scalars().all()) == len(seed.DEMO_RECIPIENTS)
     assert await ledger_service.trial_balance(session) == 0
+
+
+# --------------------------------------------------------- one chain, however many workers
+
+
+async def test_a_running_pass_is_not_joined_by_a_second_chain(session, funded):
+    """The race two workers made real.
+
+    Worker A claims the pending pass, so nothing is pending. Worker B's loop
+    then asks "is a pass scheduled?", sees none, and seeds one. A finishes and
+    schedules its own successor. Two chains now run forever, and every restart
+    of the race adds another. A running pass is a scheduled pass.
+    """
+    await reconcile.ensure_scheduled(session)
+    await session.execute(
+        text("update tasks set run_at = now() where kind = :k"), {"k": reconcile.RECONCILE}
+    )
+    await session.commit()
+    claimed = await _claim(session)
+
+    # Worker B's loop, while A holds the pass.
+    async with SessionFactory() as other:
+        await reconcile.ensure_scheduled(other)
+
+    await execute(claimed)
+    assert await task_service.pending_count(session, kind=reconcile.RECONCILE) == 1
+
+
+async def test_two_workers_seeding_at_once_leave_one_pass(session, funded):
+    """Both loops start, both see nothing scheduled, both would seed. One may."""
+
+    async def seed() -> None:
+        async with SessionFactory() as s:
+            await reconcile.ensure_scheduled(s)
+
+    await asyncio.gather(seed(), seed(), seed())
+    assert await task_service.pending_count(session, kind=reconcile.RECONCILE) == 1
+
+
+async def test_duplicate_chains_converge(session, funded):
+    """Chains that already exist — from before the fix — fold into one."""
+    for _ in range(2):
+        await task_service.enqueue(session, kind=reconcile.RECONCILE)
+    await session.commit()
+
+    await execute(await _claim(session))
+    await execute(await _claim(session))
+
+    assert await task_service.pending_count(session, kind=reconcile.RECONCILE) == 1

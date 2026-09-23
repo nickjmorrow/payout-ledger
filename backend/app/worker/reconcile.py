@@ -5,11 +5,20 @@ the same queue as everything else: it survives a restart, it is visible in the
 `tasks` table, and a worker that is down does not silently skip runs — the row
 is simply claimed late.
 
-**Duplicate reconcile tasks are harmless**, which is what makes the seeding
-below safe without a lock. Two passes over the same window reach the same
-conclusions; the second either finds nothing left to heal or writes a second
-finding recording that the problem was still there. Neither loses money, and
-paying for a lock to prevent a duplicate read is a worse trade.
+**One chain, however many workers.** Every scheduling of a pass — the seed
+below and each pass's own successor — goes through
+`task_service.schedule_once`, which counts running passes as well as pending
+ones and serialises the check with an advisory lock. This used to be a
+pending count and an argument that duplicates were harmless. Each duplicate
+pass was; the duplicate *chain* was not. With two workers, one worker's loop
+would see no pending pass while the other was running one, seed a second
+chain, and the two would then run side by side forever — with every repeat
+of the race adding another. It was spotted on the console's queue panel,
+two passes both due in 29 seconds.
+
+A single duplicate pass is still harmless, and that is still why nothing here
+needs to be more careful than this: two passes over one window reach the same
+conclusions, and neither moves money the other did not.
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,11 +43,15 @@ async def reconcile(session: AsyncSession, task: Task) -> TaskOutcome:
     # transaction that recorded this one's findings. A crash between the two
     # would otherwise stop reconciliation forever — and the failure mode of
     # "the job that finds problems is the problem" is a bad one.
-    await task_service.enqueue(
+    #
+    # `successor_of`, so this pass does not count as the pass it is
+    # scheduling; and if another chain already has one pending, this one ends.
+    await task_service.schedule_once(
         session,
         kind=RECONCILE,
         run_at=task_service.seconds_from_now(settings.reconcile_interval_seconds),
         request_id=task.request_id,
+        successor_of=task.id,
     )
     await session.commit()
 
@@ -48,18 +61,18 @@ async def reconcile(session: AsyncSession, task: Task) -> TaskOutcome:
 
 
 async def ensure_scheduled(session: AsyncSession) -> None:
-    """Make sure a reconcile pass is queued. Called by the worker at startup.
+    """Make sure a reconcile pass is queued or running. Called on every worker pass.
 
     Without a seed, a queue that has never had one never gets one. With one,
     the handler above keeps the chain going by itself.
     """
-    if await task_service.pending_count(session, kind=RECONCILE) > 0:
-        return
-
-    await task_service.enqueue(
+    seeded = await task_service.schedule_once(
         session,
         kind=RECONCILE,
         run_at=task_service.seconds_from_now(settings.reconcile_interval_seconds),
     )
+    # Commits either way: the advisory lock is held until the transaction ends,
+    # and a worker idling in an open transaction would hold it indefinitely.
     await session.commit()
-    logger.info("reconciliation seeded")
+    if seeded is not None:
+        logger.info("reconciliation seeded")
