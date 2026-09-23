@@ -126,6 +126,16 @@ async def execute(task: Task) -> None:
             structlog.contextvars.clear_contextvars()
             return
 
+        # Reloaded under an explicit await, because a rollback — the one above,
+        # or one inside a handler — expires `task` along with everything else
+        # in the session. Capturing `task_id` covers the log line, but the
+        # settle path below reads `attempts`, `max_attempts` and `payload` too,
+        # and each of those on an expired instance is an implicit load: from
+        # async code that is MissingGreenlet, raised outside the `try`, and the
+        # worker stops. That is what this did to every handler that raised,
+        # until a test made one raise. The row is known to exist, just above.
+        await session.refresh(task)
+
         # Shutting down: hand the work back rather than settle it. Nothing about
         # this task failed, and the next worker to claim it starts again.
         if outcome.status == "interrupted":

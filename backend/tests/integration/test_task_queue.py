@@ -221,3 +221,30 @@ async def test_the_wake_notification_is_held_until_commit(session):
             assert await asyncio.wait_for(woken.get(), timeout=5.0) is not None
     finally:
         await bus.stop()
+
+
+async def test_a_handler_that_raises_is_retried_and_the_worker_survives(session, monkeypatch):
+    """The settle path after an exception, which reads the task after a rollback.
+
+    Rolling back expires every instance the session holds, and an expired
+    attribute read from async code is implicit IO — `MissingGreenlet`, raised
+    from inside the `except` whose whole job is to contain failures. The worker
+    would then stop claiming anything, forever, over one bad task.
+    """
+    from app.worker import handlers
+
+    async def explodes(_session, _task):
+        raise RuntimeError("boom")
+
+    monkeypatch.setitem(handlers.HANDLERS, "explodes", explodes)
+
+    task = await task_service.enqueue(session, kind="explodes", payload={"transfer_id": "t-1"})
+    await session.commit()
+    claimed = await task_service.claim_next(session, worker_id="w1")
+    assert claimed is not None
+
+    await handlers.execute(claimed)
+
+    await session.refresh(task)
+    assert task.status == "pending", "one raise is retryable, with attempts left"
+    assert task.error == "RuntimeError: boom"
