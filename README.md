@@ -102,8 +102,8 @@ scripts/check.sh           # lint, format, types and tests, both halves
 scripts/check.sh --fast    # the subset the hook runs — no database, no bundle
 ```
 
-One script, three callers: you, the pre-commit hook, and CI. A hook that checks
-something different from CI is worse than no hook.
+One script, two callers: you, before a push, and the pre-commit hook. There is
+no hosted CI; the full run is the gate.
 
 Most of the test suite needs a real Postgres, deliberately: `FOR UPDATE SKIP
 LOCKED` means nothing without concurrent transactions, a deferred trigger means

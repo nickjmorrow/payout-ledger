@@ -18,15 +18,15 @@
 # `git add -p`, this checks what is on disk rather than what you are about to
 # commit. The correct fix is to stash everything unstaged, run, and restore —
 # and a stash-and-restore that goes wrong in the middle of a commit is a good
-# way to lose work you cannot get back. CI checks the real commit; this is an
-# early warning, and the trade is deliberate.
+# way to lose work you cannot get back. The full run before a push checks the
+# real commit; this is an early warning, and the trade is deliberate.
 #
 # **It only checks the halves you touched,** and it uses --fast, so it does not
 # need a database and does not rebuild the bundle. It is the fast subset of the
-# same script CI runs, not a different set of rules.
+# same script you run in full, not a different set of rules.
 #
 # `git commit --no-verify` skips it. That is a legitimate thing to do on a
-# work-in-progress commit; CI is what makes it safe.
+# work-in-progress commit; the full run before a push is what makes it safe.
 
 set -uo pipefail
 
@@ -59,7 +59,7 @@ Commit aborted: the checks above failed.
   cd backend  && uv run ruff format app tests && uv run ruff check --fix app tests
   cd frontend && pnpm lint:fix && pnpm format
 
-  git commit --no-verify         commit anyway (CI will still run)
+  git commit --no-verify         commit anyway, and run the full check before pushing
 MSG
   exit 1
 fi

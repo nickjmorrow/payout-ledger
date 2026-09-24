@@ -622,7 +622,7 @@ exist.
 ### Enforcement
 
 `ruff check`, `ruff format --check` and `basedpyright` strict on `app/`, all in
-CI. Ruff selects nearly every rule group and turns individual rules off *with a
+`scripts/check.sh`. Ruff selects nearly every rule group and turns individual rules off *with a
 note*, rather than selecting a short list: an `ignore` with a reason is a
 decision someone can argue with later, and a short `select` is a decision nobody
 wrote down.
@@ -662,9 +662,10 @@ scripts/check.sh           lint, format, types and tests, both halves
 scripts/check.sh --fast    the subset the pre-commit hook runs
 ```
 
-**One script, three callers** — you, the hook, CI. A hook that checks something
-different from CI is worse than no hook: it teaches you to trust a green that
-does not mean anything. `--fast` drops only what is not a pure function of the
+**One script, two callers** — you, before a push, and the hook. A hook that
+checks something different from the full run is worse than no hook: it teaches
+you to trust a green that does not mean anything. There is no hosted CI; the
+full run is the gate. `--fast` drops only what is not a pure function of the
 source: the integration suite, which needs Postgres, and `vite build`.
 
 ### Structural tests

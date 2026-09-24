@@ -43,7 +43,7 @@ if command -v pnpm >/dev/null 2>&1; then
   (cd frontend && pnpm install --frozen-lockfile)
 elif command -v corepack >/dev/null 2>&1; then
   # corepack reads `packageManager` in frontend/package.json, so this is the
-  # same pnpm the Dockerfile and CI use rather than whatever is on PATH.
+  # same pnpm the Dockerfile uses rather than whatever is on PATH.
   (cd frontend && corepack pnpm install --frozen-lockfile)
 else
   echo "   pnpm not found — install Node 22+ (corepack ships with it) and re-run."
