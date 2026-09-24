@@ -221,7 +221,7 @@ async def test_a_contradiction_is_never_healed_automatically(session, provider, 
 async def test_a_reversal_the_provider_actually_paid_is_reported(session, provider, funded):
     """We gave the money back to the fund; they paid the recipient anyway.
 
-    The programme has now paid out money its books show as still available,
+    The program has now paid out money its books show as still available,
     which is the worst of the reportable findings and deserves its own case.
     """
     _, _, recipient = funded
@@ -324,7 +324,7 @@ async def _claim(session):
 # ------------------------------------------------------------------ seeding
 
 
-async def test_seeding_twice_does_not_fund_the_programme_twice(session):
+async def test_seeding_twice_does_not_fund_the_program_twice(session):
     """The seeder runs on every boot, so this is the failure that matters.
 
     A second opening balance would keep the books perfectly balanced — it is a

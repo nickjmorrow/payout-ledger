@@ -46,13 +46,13 @@ services:
   # schema.
   #
   # Seeds as well as migrates, and the seeding is not optional: the chart of
-  # accounts (a programme funding account and a provider settlement account) has
-  # to exist before any transfer can be authorised, so a stack that skipped it
+  # accounts (a program funding account and a provider settlement account) has
+  # to exist before any transfer can be authorized, so a stack that skipped it
   # would start cleanly and then refuse every disbursement. The seeder is
   # idempotent, so running it on every deploy is a no-op after the first.
   #
   # SEED_DEMO_DATA defaults to FALSE here and true in development. Sample
-  # recipients and a two-million-shilling opening balance are exactly what you
+  # recipients and a million-dollar opening balance are exactly what you
   # want in a demo and exactly what you do not want on a real deployment.
   migrate:
     build:

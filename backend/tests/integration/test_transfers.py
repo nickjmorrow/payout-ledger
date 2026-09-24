@@ -7,7 +7,7 @@ real money when they break:
   - two concurrent transfers cannot overdraw the fund between them.
 
 The second is write skew, and it is the one no constraint catches: each journal
-balances perfectly and the programme has still promised money it does not have.
+balances perfectly and the program has still promised money it does not have.
 """
 
 import asyncio
@@ -49,7 +49,7 @@ async def _post(client, recipient_id, key="test-key-1", amount=2_500_00):
 
 
 @pytest.mark.usefixtures("chart")
-async def test_initiating_a_transfer_authorises_it_and_queues_the_payment(
+async def test_initiating_a_transfer_authorizes_it_and_queues_the_payment(
     client, session, recipient
 ):
     response = await _post(client, recipient.id)
@@ -60,12 +60,12 @@ async def test_initiating_a_transfer_authorises_it_and_queues_the_payment(
     assert data["amountMinor"] == 2_500_00
     assert data["recipientName"] == "Asha Mwangi"
 
-    # The fund is debited at authorisation, before any money moves: the
-    # programme must not be able to promise the same shilling twice.
+    # The fund is debited at authorization, before any money moves: the
+    # program must not be able to promise the same dollar twice.
     funding = await ledger_service.system_account(session, kind="program_funding", currency=KES)
     assert await ledger_service.balance(session, account_id=funding.id) == FUND - 2_500_00
 
-    # And the payment is queued in the same transaction that authorised it.
+    # And the payment is queued in the same transaction that authorized it.
     queued = await session.execute(
         text("select payload->>'transfer_id' from tasks where kind = 'disburse_transfer'")
     )
@@ -180,7 +180,7 @@ async def test_concurrent_transfers_cannot_overdraw_the_fund(session, recipient)
     Two transfers, each for more than half the fund, started at the same time.
     Without the row lock in `initiate` both read the balance, both see enough
     and both post — every journal balances, the trial balance is zero, and the
-    programme has promised money it does not have.
+    program has promised money it does not have.
 
     Asserted on the resulting balance rather than on which one failed, because
     either may win. What must never happen is both succeeding.
@@ -197,11 +197,11 @@ async def test_concurrent_transfers_cannot_overdraw_the_fund(session, recipient)
             except transfer_service.InsufficientFundsError:
                 await s.rollback()
                 return "refused"
-            return "authorised"
+            return "authorized"
 
     outcomes = await asyncio.gather(attempt(), attempt())
 
-    assert sorted(outcomes) == ["authorised", "refused"], outcomes
+    assert sorted(outcomes) == ["authorized", "refused"], outcomes
     remaining = await ledger_service.balance(session, account_id=funding.id)
     assert remaining == 400_00
     assert await ledger_service.trial_balance(session) == 0
@@ -215,7 +215,7 @@ async def test_the_detail_shows_the_journal_and_the_attempts(client, session, re
     """What the books say and what the worker did, in one response.
 
     Asserted on what the lines *mean* rather than on their existence: the
-    authorisation debits the fund and credits the recipient's payable, and a
+    authorization debits the fund and credits the recipient's payable, and a
     reversal is a second journal with the pair the other way round — both
     still on the page, because that is the whole argument for append-only.
     """
@@ -236,7 +236,7 @@ async def test_the_detail_shows_the_journal_and_the_attempts(client, session, re
     # The fixture's `refresh` auto-began a transaction on this session that is
     # still open, and Postgres's `now()` is frozen at transaction start — so a
     # reversal posted through it would carry a timestamp from *before* the
-    # authorisation the API just committed, and sort ahead of it. End it first.
+    # authorization the API just committed, and sort ahead of it. End it first.
     await session.rollback()
     transfer = await transfer_service.get(session, transfer_id=uuid.UUID(transfer_id))
     assert transfer is not None

@@ -50,7 +50,7 @@ services:
     #
     # The seeder is idempotent, so this runs on every `docker compose up`. It
     # creates the chart of accounts, which is required setup rather than sample
-    # data — no transfer can be authorised without it. `SEED_DEMO_DATA=false`
+    # data — no transfer can be authorized without it. `SEED_DEMO_DATA=false`
     # keeps the accounts and skips the recipients and opening balance.
     command: ['sh', '-c', 'alembic upgrade head && python -m app.seed']
     environment:
@@ -107,7 +107,7 @@ services:
     # Wrapped in watchfiles for the same reason the backend runs with --reload:
     # edit app/**, the worker restarts. It comes free with uvicorn[standard].
     # A task in flight is killed by the restart and swept back onto the queue a
-    # few minutes later — dev-loop behaviour, not deployment behaviour. Run the
+    # few minutes later — dev-loop behavior, not deployment behavior. Run the
     # bare `python -m app.worker` for that.
     command: ['watchfiles', '--filter', 'python', 'python -m app.worker', '/srv/app']
     environment:

@@ -1,6 +1,6 @@
 # Payout Ledger
 
-A disbursement service for unconditional cash transfers. A programme sends money
+A disbursement service for unconditional cash transfers. A program sends money
 to recipients through a payment provider, and the books stay correct while
 that happens — including when the provider times out, a worker dies mid-payment,
 or the same request arrives twice.
@@ -11,12 +11,12 @@ Postgres + FastAPI + React + a worker. Four containers, one command.
 docker compose up
 ```
 
-Then open <http://localhost:3001>. The programme starts with an opening balance
-and 24 recipients. Authorise a disbursement and watch it move: **pending**
+Then open <http://localhost:3001>. The program starts with an opening balance
+and 24 recipients. Authorize a disbursement and watch it move: **pending**
 while the fund is debited and nobody has been paid yet, **processing** once the
 provider accepts it, **succeeded** when they confirm the money arrived.
 
-Watch "Available to disburse" drop the moment you authorise, while "Held at
+Watch "Available to disburse" drop the moment you authorize, while "Held at
 provider" does not. That gap is the point — the money has been promised and has
 not moved — and both fall together a few seconds later when it settles.
 
@@ -46,7 +46,7 @@ The domain is small. The failures it survives are not.
   balance and each see enough will both post and overdraw the fund. Every
   journal balances; no constraint objects. There is a test that reproduces it.
 - **Payment runs, all or nothing.** Pay every enrolled recipient in one
-  request: one transaction authorises every transfer or none, checked against
+  request: one transaction authorizes every transfer or none, checked against
   the fund for the whole total. Two workers claim the sends with `SKIP LOCKED`
   and the console shows which worker holds which.
 - **Live updates over Server-Sent Events**, fed by `NOTIFY` from inside the
@@ -58,7 +58,7 @@ The domain is small. The failures it survives are not.
 
 - **The books for any transfer.** Click a recipient to see its journal entries
   as a bookkeeper would lay them out — debits, credits, totals that match — and
-  every attempt the worker made. A failed transfer shows the authorisation and
+  every attempt the worker made. A failed transfer shows the authorization and
   its reversal side by side; nothing was deleted.
 - **The queue as it works.** Due, scheduled, running and dead work, with the
   worker holding each task and a countdown to the next one.
@@ -163,10 +163,10 @@ Everything it creates is named after the app, so it shares a server with other
 projects deployed the same way.
 
 **The demo resets every night at 04:17.** The console has no accounts, so anyone
-can authorise payments. `scripts/reset-demo.sh` drops this project's database
+can authorize payments. `scripts/reset-demo.sh` drops this project's database
 volume and brings it back freshly seeded — and refuses to run unless `.env.prod`
 says `SEED_DEMO_DATA=true`, which is the only thing between a cron line and
-deleting a real programme's books every night.
+deleting a real program's books every night.
 
 **The nginx proxy is not decoration.** The client calls `/api` on its own origin,
 and in development Vite's dev server proxies that to the backend — a `server:`
@@ -174,8 +174,8 @@ block that does not exist in a built bundle. Without something reproducing it, a
 production build has no route to the API at all.
 
 **The migrate step seeds as well as migrating, and that is not optional.** The
-chart of accounts — a programme funding account and a provider settlement
-account — has to exist before any transfer can be authorised, so a stack that
+chart of accounts — a program funding account and a provider settlement
+account — has to exist before any transfer can be authorized, so a stack that
 skipped it would start cleanly and then refuse every disbursement. The seeder is
 idempotent. `SEED_DEMO_DATA` defaults to false here and true in development:
 sample recipients and an opening balance are exactly what a demo wants and

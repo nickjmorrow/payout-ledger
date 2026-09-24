@@ -24,7 +24,7 @@
 #      starts — the migrate container migrates and seeds on the way up;
 #   4. puts Caddy in front, which gets and renews the certificate itself;
 #   5. installs a nightly reset (scripts/reset-demo.sh), because anyone can
-#      authorise payments on a console with no accounts.
+#      authorize payments on a console with no accounts.
 set -euo pipefail
 
 target="${1:?usage: [APP=name] scripts/deploy.sh user@host [domain]}"

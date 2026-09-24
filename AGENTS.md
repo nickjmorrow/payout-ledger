@@ -17,7 +17,7 @@ part honest.
 
 ## What this is
 
-A disbursement service for unconditional cash transfers: a programme sends
+A disbursement service for unconditional cash transfers: a program sends
 money to recipients through a payment provider, and the books stay correct
 while that happens.
 
@@ -46,8 +46,8 @@ through a Protocol, exactly as a real integration would be.
 docker compose up          # db, migrate+seed, backend, worker, frontend
 ```
 
-Then <http://localhost:3001>. The programme is seeded with an opening balance
-and 24 recipients; authorise a disbursement, or a payment run to all of them,
+Then <http://localhost:3001>. The program is seeded with an opening balance
+and 24 recipients; authorize a disbursement, or a payment run to all of them,
 and watch it settle.
 
 `scripts/setup.sh` once per clone, `scripts/check.sh` for everything.
@@ -107,7 +107,7 @@ expects — a fund with money left in it is positive.
 
 **Getting a direction backwards is the only mistake that still balances.** No
 constraint will ever object, because the journal is perfectly valid. The tests
-that catch it assert on what the numbers *mean* — that authorising reduces the
+that catch it assert on what the numbers *mean* — that authorizing reduces the
 money available to give away — rather than that rows exist. Write that kind of
 test when you add a posting.
 
@@ -132,13 +132,13 @@ without the books ever showing a payment that did not occur.
 
 | Status | Means | Posting |
 | --- | --- | --- |
-| `pending` | Authorised. The fund is debited, the recipient is owed. | `transfer_authorized` |
+| `pending` | Authorized. The fund is debited, the recipient is owed. | `transfer_authorized` |
 | `processing` | The provider has accepted it. | none — the books already say enough |
 | `succeeded` | They confirm the recipient was paid. | `transfer_settled` |
 | `failed` | It will not happen. | `transfer_reversed` |
 
-**Authorising debits the fund before the money moves.** That is the conservative
-direction: the programme must not be able to promise the same dollar twice
+**Authorizing debits the fund before the money moves.** That is the conservative
+direction: the program must not be able to promise the same dollar twice
 while a payment is in flight. It comes back on reversal.
 
 ### Concurrency: the failure no constraint catches
@@ -156,16 +156,16 @@ do not exist yet, so there is nothing there to lock.
 
 Verified by deleting the lock and watching
 `test_concurrent_transfers_cannot_overdraw_the_fund` report
-`['authorised', 'authorised']`. Do that again if you change this.
+`['authorized', 'authorized']`. Do that again if you change this.
 
 ### Payment runs
 
-A run is many transfers authorised as one decision (`run_service`), and it is
+A run is many transfers authorized as one decision (`run_service`), and it is
 **all or nothing**: every transfer or none. That is not a policy on top of the
 transfers — it is what doing the whole run in one transaction means. N calls to
 `transfer_service.initiate`, one commit. A run that fails on its seventh
 recipient leaves no trace of the first six. Partial runs sound kinder and are
-worse: an operator told "twenty-three of forty authorised" has to work out which
+worse: an operator told "twenty-three of forty authorized" has to work out which
 seventeen to retry against a fund that moved underneath them, and the chance of
 paying someone twice is the chance they get that list wrong.
 
@@ -187,7 +187,7 @@ they were decided together.
 header.** Not optional. An endpoint that moves money and accepts a keyless
 request will eventually pay somebody twice, and the client is the only party
 that knows two requests are the same request. A run raises the stakes: a
-timed-out run retried without its key authorises every payment in it again.
+timed-out run retried without its key authorizes every payment in it again.
 
 The HTTP half — four service answers into four responses — is
 `api/idempotent.py`, written once for both endpoints. The 409 carries
@@ -240,7 +240,7 @@ Three properties of the mock are deliberate and must survive a real integration:
   payment for a repeat. That is what makes at-least-once delivery tolerable: we
   may send twice, the recipient is paid once.
 
-`ProviderError.retryable` is the adapter's judgement and nobody else's, because
+`ProviderError.retryable` is the adapter's judgment and nobody else's, because
 only the adapter knows whether a failure is a timeout worth another attempt or a
 rejection that never will be. Marking everything retryable burns a payment's
 whole budget on something that cannot succeed; marking nothing retryable drops
@@ -251,7 +251,7 @@ pass has somewhere to plug in; they are not themselves that pass.
 
 ## The worker
 
-**Payments are not sent in the HTTP request.** `POST /transfers` authorises and
+**Payments are not sent in the HTTP request.** `POST /transfers` authorizes and
 enqueues; a separate process — `app/worker/`, its own container — sends and then
 settles.
 
@@ -307,7 +307,7 @@ transfers — so `_handle_provider_error` never runs, and the transfer stays
 `pending` with the fund debited. Until that is fixed automatically, a person
 fixes it from the console: the dead-letter queue has a Retry.
 
-**Retry is a judgement, and `dead_letter_service` makes it.** A task about a
+**Retry is a judgment, and `dead_letter_service` makes it.** A task about a
 transfer that already settled or was reversed is refused — running it again
 would do nothing, and would look to an operator like a second payment. A task
 about an unfinished transfer is retried, safely, because both halves check
@@ -322,7 +322,7 @@ not doubled.
 
 Reconciliation is one task that schedules its own successor, and every
 scheduling of it goes through `task_service.schedule_once`: a *running* pass
-counts as scheduled, and the check-then-insert is serialised by an advisory
+counts as scheduled, and the check-then-insert is serialized by an advisory
 lock. It used to count only pending passes, and with two workers that seeded a
 second chain whenever one worker's loop looked while the other was mid-pass —
 chains that then ran side by side forever. One duplicate pass is harmless; a
@@ -336,7 +336,7 @@ panel. Recurring work you add goes through `schedule_once` too.
 for errors, and spending it on a payment that is merely slow would abandon a
 transfer that was going to settle perfectly well.
 
-Polling rather than a webhook. A webhook is an optimisation on top of this,
+Polling rather than a webhook. A webhook is an optimization on top of this,
 never a replacement — a callback that is never delivered leaves a payment in
 flight forever, and the only thing that finds it is somebody asking.
 
@@ -525,7 +525,7 @@ runs the first two on every commit and the third only when a database is
 reachable, so the directory *is* the interface.
 
 Frontend tests sit beside what they test. A top-level `.ts` module with no
-neighbouring test is visible at a glance, and a structural test fails on it.
+neighboring test is visible at a glance, and a structural test fails on it.
 
 **Most tests here need a real Postgres, and that is correct.** `FOR UPDATE SKIP
 LOCKED` has no meaning without concurrent transactions, a deferred constraint
@@ -638,8 +638,8 @@ wrote down.
   adding up. This was a real bug, found by driving the UI rather than by a test.
   A new view whose numbers the worker can move needs both: a topic in
   `keysToInvalidate`, and `usePollInterval`.
-- **Colours are semantic tokens** from the `@theme` block in `index.css`, never
-  literal Tailwind palette classes. For a fraction of a colour use `ink`
+- **Colors are semantic tokens** from the `@theme` block in `index.css`, never
+  literal Tailwind palette classes. For a fraction of a color use `ink`
   (`border-ink/10`), which inverts with the theme where `black` and `white` do
   not.
 - **Loading, failed and empty are three different states**, and every panel
@@ -649,8 +649,8 @@ wrote down.
   skeleton the shape of what is coming (`Skeleton`, inside `Loading`, which
   sets `aria-busy` and says what is loading in words); a failed read is
   `LoadFailed`, which says so and that it is retrying.
-- **`processing` is coloured as pending, not as success.** The money has been
-  promised and has not arrived; sharing a colour with `succeeded` would tell an
+- **`processing` is colored as pending, not as success.** The money has been
+  promised and has not arrived; sharing a color with `succeeded` would tell an
   operator the payment landed when it has not.
 - The view model and `api/` contain **no React**. The moment one imports a hook,
   testing it needs a renderer, which is how that suite stops existing.
@@ -685,7 +685,7 @@ or an AST walk.
 | Registering one task kind twice is refused | backend |
 | Every `__init__.py` is empty | backend |
 | The browser knows every topic the server announces | backend |
-| No literal Tailwind colour anywhere in `src/` | frontend |
+| No literal Tailwind color anywhere in `src/` | frontend |
 | The view model and `api/` import no React | frontend |
 | A component or hook file is named after what it exports | frontend |
 | Every top-level `.ts` module has a test beside it | frontend |
@@ -708,10 +708,10 @@ each one needs already exists.
 | --- | --- | --- |
 | Pagination | The transfer list gets long enough to notice | The `{data, meta}` envelope has the room |
 | Rate limiting | More than one operator | — |
-| Recipient enrolment UI | You tire of seeding | `recipient_service`, and the table takes the write |
-| Multi-currency | A second programme | Accounts and journals are already per-currency; what is missing is an FX leg, not a column |
+| Recipient enrollment UI | You tire of seeding | `recipient_service`, and the table takes the write |
+| Multi-currency | A second program | Accounts and journals are already per-currency; what is missing is an FX leg, not a column |
 | Webhooks from the provider | Polling latency actually bothers somebody | `settle_transfer` already does the work; a webhook would just call it sooner |
-| Approval workflow | Disbursements need a second pair of eyes | `pending` already means "authorised, not sent" |
+| Approval workflow | Disbursements need a second pair of eyes | `pending` already means "authorized, not sent" |
 | Recording a decision on a reported finding | Reported findings happen outside chaos testing | Findings are append-only facts; a decision is a second fact about one, not an edit — and for most kinds the real resolution is a correcting journal, which deserves its own design |
 
 **Delete a row the day it stops being true.** A stale "deliberately missing"

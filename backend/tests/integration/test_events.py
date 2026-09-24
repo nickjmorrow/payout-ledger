@@ -46,7 +46,7 @@ async def _drain(queue: asyncio.Queue, *, settle: float = 0.3) -> list[dict]:
             return frames
 
 
-async def test_authorising_a_transfer_announces_it_and_its_task_at_commit(
+async def test_authorizing_a_transfer_announces_it_and_its_task_at_commit(
     session, recipient, listening
 ):
     transfer = await transfer_service.initiate(

@@ -81,7 +81,7 @@ async def test_a_key_is_scoped_to_its_endpoint(session):
 
 
 async def test_the_fingerprint_ignores_key_order_and_whitespace(session):
-    """Two clients serialising the same request must agree that it is the same."""
+    """Two clients serializing the same request must agree that it is the same."""
     assert idempotency_service.fingerprint({"a": 1, "b": 2}) == idempotency_service.fingerprint(
         {"b": 2, "a": 1}
     )

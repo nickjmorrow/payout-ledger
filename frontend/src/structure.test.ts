@@ -59,7 +59,7 @@ const TAILWIND_PALETTE = [
   'white',
 ];
 
-const COLOUR_UTILITIES = [
+const COLOR_UTILITIES = [
   'bg',
   'text',
   'border',
@@ -78,22 +78,22 @@ const COLOUR_UTILITIES = [
   'to',
 ];
 
-const LITERAL_COLOUR = new RegExp(
-  String.raw`\b(?:${COLOUR_UTILITIES.join('|')})-(?:${TAILWIND_PALETTE.join('|')})\b`,
+const LITERAL_COLOR = new RegExp(
+  String.raw`\b(?:${COLOR_UTILITIES.join('|')})-(?:${TAILWIND_PALETTE.join('|')})\b`,
   'g',
 );
 
-describe('colours are semantic tokens', () => {
-  it('uses no literal Tailwind palette colour anywhere in src/', () => {
+describe('colors are semantic tokens', () => {
+  it('uses no literal Tailwind palette color anywhere in src/', () => {
     const offenders = FILES.flatMap((file) => {
-      const hits = [...read(file).matchAll(LITERAL_COLOUR)].map((match) => match[0]);
+      const hits = [...read(file).matchAll(LITERAL_COLOR)].map((match) => match[0]);
       return hits.map((hit) => `${relative(file)}: ${hit}`);
     });
 
     expect(
       offenders,
       'Use a token from the @theme block in src/index.css — `bg-surface`, `text-danger`, ' +
-        '`text-on-accent`. For a fraction of a colour use `ink` (`border-ink/10`), which inverts ' +
+        '`text-on-accent`. For a fraction of a color use `ink` (`border-ink/10`), which inverts ' +
         'with the theme where `black` and `white` do not. See AGENTS.md > Frontend.',
     ).toEqual([]);
   });

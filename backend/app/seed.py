@@ -91,7 +91,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
         select(func.count()).select_from(JournalEntry).where(JournalEntry.kind == "funding_deposit")
     )
     if funded.scalar_one() > 0:
-        logger.info("programme already funded, skipping opening balance")
+        logger.info("program already funded, skipping opening balance")
         return
 
     funding = await ledger_service.system_account(
@@ -113,7 +113,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
         ],
     )
     await session.commit()
-    logger.info("programme funded", amount_minor=OPENING_BALANCE_MINOR, currency=CURRENCY)
+    logger.info("program funded", amount_minor=OPENING_BALANCE_MINOR, currency=CURRENCY)
 
 
 async def run() -> None:

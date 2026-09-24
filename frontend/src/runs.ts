@@ -9,7 +9,7 @@ export interface RunProgress {
   /** Nothing further will happen to any of it. */
   isDone: boolean;
   paid: number;
-  /** Authorised, not yet handed to the provider. */
+  /** Authorized, not yet handed to the provider. */
   queued: number;
   total: number;
 }

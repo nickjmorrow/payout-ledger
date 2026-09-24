@@ -50,7 +50,7 @@ async def _claim(session) -> Task:
     The settle check is deliberately enqueued a few seconds out, and a retry
     backs off further still, so a test that simply claimed would find nothing
     and have to sleep. Moving `run_at` is honest about which part of the
-    behaviour is being skipped: the waiting, not the scheduling.
+    behavior is being skipped: the waiting, not the scheduling.
     """
     await session.execute(text("update tasks set run_at = now() where status = 'pending'"))
     await session.commit()

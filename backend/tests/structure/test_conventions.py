@@ -220,7 +220,7 @@ def test_only_the_provider_package_touches_the_provider_table():
 
 
 def test_nothing_outside_the_provider_package_imports_the_mock():
-    """Depending on the mock is depending on behaviour the real thing lacks.
+    """Depending on the mock is depending on behavior the real thing lacks.
 
     `advance_pending` above all: a real provider settles on its own schedule
     and offers no way to make it happen sooner. Code that calls it cannot run

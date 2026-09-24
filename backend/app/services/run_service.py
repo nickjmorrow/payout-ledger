@@ -55,7 +55,7 @@ async def initiate(
     memo: str | None = None,
     request_id: str | None = None,
 ) -> PaymentRun:
-    """Authorise every transfer in a run, or none. **Does not commit.**"""
+    """Authorize every transfer in a run, or none. **Does not commit.**"""
     if not items:
         raise EmptyRunError("A payment run needs at least one recipient.")
 
@@ -112,17 +112,17 @@ async def recent(session: AsyncSession, *, limit: int = 20) -> list[RunSummary]:
             )
         ).scalars()
     )
-    return await _summarise(session, runs)
+    return await _summarize(session, runs)
 
 
 async def summary(session: AsyncSession, *, run_id: uuid.UUID) -> RunSummary | None:
     run = await session.get(PaymentRun, run_id)
     if run is None:
         return None
-    return (await _summarise(session, [run]))[0]
+    return (await _summarize(session, [run]))[0]
 
 
-async def _summarise(session: AsyncSession, runs: list[PaymentRun]) -> list[RunSummary]:
+async def _summarize(session: AsyncSession, runs: list[PaymentRun]) -> list[RunSummary]:
     """Count each run's transfers by status with one GROUP BY for all of them."""
     summaries = {run.id: RunSummary(run=run) for run in runs}
     if not summaries:

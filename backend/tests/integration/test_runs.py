@@ -1,7 +1,7 @@
 """Payment runs: many transfers, one decision.
 
 The property that gets the most attention is all-or-nothing. A run that
-authorised some of its transfers and refused the rest would hand an operator a
+authorized some of its transfers and refused the rest would hand an operator a
 list to reconcile by hand against a fund that had moved underneath them — and
 the chance of paying someone twice is the chance they get that list wrong.
 """
@@ -57,7 +57,7 @@ async def _count(session, model) -> int:
     return (await session.execute(select(func.count()).select_from(model))).scalar_one()
 
 
-async def test_a_run_authorises_every_transfer_and_debits_the_fund_by_the_total(
+async def test_a_run_authorizes_every_transfer_and_debits_the_fund_by_the_total(
     client, session, funding, people
 ):
     response = await _post(client, _body(people))
@@ -178,10 +178,10 @@ async def test_two_runs_at_once_cannot_overdraw_the_fund(session, funding, peopl
             except transfer_service.InsufficientFundsError:
                 await s.rollback()
                 return "refused"
-            return "authorised"
+            return "authorized"
 
     outcomes = await asyncio.gather(attempt(people[:2]), attempt(people[1:]))
 
-    assert sorted(outcomes) == ["authorised", "refused"], outcomes
+    assert sorted(outcomes) == ["authorized", "refused"], outcomes
     assert await ledger_service.balance(session, account_id=funding.id) == FUND - 6_000_00
     assert await ledger_service.trial_balance(session) == 0

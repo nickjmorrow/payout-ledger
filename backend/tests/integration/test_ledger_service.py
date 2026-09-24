@@ -30,7 +30,7 @@ async def _accounts(session: AsyncSession) -> tuple[Account, Account, Account]:
     session.add(recipient)
     await session.flush()
 
-    funding = Account(name="Programme fund", kind="program_funding", currency=KES)
+    funding = Account(name="Program fund", kind="program_funding", currency=KES)
     settlement = Account(name="Provider float", kind="provider_settlement", currency=KES)
     payable = Account(
         name="Asha Mwangi", kind="recipient_payable", currency=KES, recipient_id=recipient.id
@@ -67,8 +67,8 @@ async def test_a_balanced_journal_posts_and_moves_both_balances(session):
     assert await ledger_service.balance(session, account_id=settlement.id) == 1_000_000_00
 
 
-async def test_authorising_a_transfer_moves_the_fund_into_a_payable(session):
-    """The direction test: authorising must *reduce* the money left to give away.
+async def test_authorizing_a_transfer_moves_the_fund_into_a_payable(session):
+    """The direction test: authorizing must *reduce* the money left to give away.
 
     Written as an assertion about meaning rather than about rows, because a
     reversed pair balances perfectly and no database constraint will object.

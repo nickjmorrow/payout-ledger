@@ -5,7 +5,7 @@
 #
 #   APP=payout-ledger /opt/payout-ledger/scripts/reset-demo.sh
 #
-# The console has no accounts, so anyone can authorise payments — which is the
+# The console has no accounts, so anyone can authorize payments — which is the
 # point of a demo, and means the fund drains and the lists fill up. A reset
 # every night keeps the first thing a visitor sees the thing it should be.
 #
@@ -16,7 +16,7 @@
 #
 # **It refuses to run unless SEED_DEMO_DATA=true.** That is the flag that says
 # "this deployment is a demo", and the only thing standing between a cron line
-# and deleting a real programme's books every night at four.
+# and deleting a real program's books every night at four.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

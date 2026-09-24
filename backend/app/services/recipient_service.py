@@ -1,4 +1,4 @@
-"""Recipients: the people a programme sends money to."""
+"""Recipients: the people a program sends money to."""
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

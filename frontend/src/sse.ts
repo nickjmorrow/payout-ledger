@@ -18,8 +18,8 @@ export interface SseEvent {
  */
 export function parseSse(buffer: string): { events: SseEvent[]; rest: string } {
   // The spec allows CRLF and bare CR as line endings too.
-  const normalised = buffer.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-  const blocks = normalised.split('\n\n');
+  const normalized = buffer.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+  const blocks = normalized.split('\n\n');
   // The last block has no terminating blank line yet, so it is not an event.
   const rest = blocks.pop() ?? '';
 
