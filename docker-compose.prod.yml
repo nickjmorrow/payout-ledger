@@ -12,6 +12,9 @@
 #     thing you tested is not the thing that runs.
 #   * No hot reload, and the backend runs as an unprivileged user.
 #   * restart: unless-stopped everywhere, so a crash or a reboot recovers.
+#   * Rotated logs: at most three 10 MB files per container. Docker keeps
+#     container logs forever unless told otherwise, and this shares a small
+#     server with other projects.
 #   * Healthchecks on everything, including the worker, which has no HTTP port
 #     and so proves liveness by touching a file once per loop pass.
 #   * The migrate step also seeds the chart of accounts, which is required
@@ -23,8 +26,15 @@
 # secrets management, log shipping, and backups.
 name: payout-ledger-prod
 
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: '3'
+
 services:
   db:
+    logging: *logging
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
@@ -55,6 +65,7 @@ services:
   # recipients and a million-dollar opening balance are exactly what you
   # want in a demo and exactly what you do not want on a real deployment.
   migrate:
+    logging: *logging
     build:
       context: ./backend
       target: production
@@ -70,6 +81,7 @@ services:
         condition: service_healthy
 
   backend:
+    logging: *logging
     build:
       context: ./backend
       target: production
@@ -86,6 +98,7 @@ services:
         condition: service_completed_successfully
 
   worker:
+    logging: *logging
     build:
       context: ./backend
       target: production
@@ -118,6 +131,7 @@ services:
         condition: service_completed_successfully
 
   frontend:
+    logging: *logging
     build:
       context: ./frontend
       target: production
