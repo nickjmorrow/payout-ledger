@@ -16,8 +16,8 @@
 # both have the bare sslip.io name, so give this one a prefix, as above.
 #
 # On a fresh Ubuntu 24.04 server, the first run:
-#   1. installs Docker and Caddy from Ubuntu's own packages, adds swap, and opens
-#      only SSH, HTTP and HTTPS;
+#   1. installs Docker from Ubuntu's packages and Caddy from Caddy's own apt
+#      repository, adds swap, and opens only SSH, HTTP and HTTPS;
 #   2. writes .env.prod there: a generated database password, a free local port,
 #      and SEED_DEMO_DATA=true, because this is the public demo;
 #   3. copies the code (rsync, so later runs send only what changed), builds and
@@ -52,10 +52,10 @@ say "Server: $target  ·  App: $app  ·  Site: https://$domain"
 say "Provisioning"
 remote 'bash -s' <<'PROVISION'
 set -euo pipefail
-if ! command -v docker >/dev/null || ! command -v caddy >/dev/null; then
+if ! command -v docker >/dev/null; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -q
-  apt-get install -yq docker.io docker-compose-v2 docker-buildx caddy rsync ufw
+  apt-get install -yq docker.io docker-compose-v2 docker-buildx rsync ufw
   systemctl enable --now docker
   if ! swapon --show | grep -q .; then
     fallocate -l 2G /swapfile
@@ -70,6 +70,22 @@ if ! command -v docker >/dev/null || ! command -v caddy >/dev/null; then
   ufw --force enable
 else
   echo "already provisioned"
+fi
+
+# Caddy from its own repository: Ubuntu's package panics and exits on every
+# reload, taking every site on the server down. Also upgrades an older server.
+# --force-confold keeps the Caddyfile below instead of the package default.
+if [[ ! -f /etc/apt/sources.list.d/caddy-stable.list ]]; then
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get install -yq debian-keyring debian-archive-keyring apt-transport-https curl gpg
+  curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key |
+    gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt \
+    > /etc/apt/sources.list.d/caddy-stable.list
+  chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg \
+    /etc/apt/sources.list.d/caddy-stable.list
+  apt-get update -q
+  apt-get install -yq -o Dpkg::Options::=--force-confold caddy
 fi
 
 mkdir -p /etc/caddy/sites
@@ -134,7 +150,9 @@ say "HTTPS"
 # This project's site file only, so deploying it never touches another's.
 # flush_interval -1 passes Server-Sent Events through as they are written —
 # without it the console's live updates arrive in lumps, or not at all.
-remote "cat > /etc/caddy/sites/$app.caddy && caddy validate --config /etc/caddy/Caddyfile >/dev/null && systemctl reload caddy" <<SITE
+# Reload drops no connections; if it fails, or Caddy is down a moment later,
+# restart rather than leave every site on the server down.
+remote "cat > /etc/caddy/sites/$app.caddy && caddy validate --config /etc/caddy/Caddyfile >/dev/null && { systemctl reload caddy || systemctl restart caddy; } && sleep 2 && { systemctl is-active --quiet caddy || systemctl restart caddy; }" <<SITE
 $domain {
 	reverse_proxy 127.0.0.1:$port {
 		flush_interval -1
