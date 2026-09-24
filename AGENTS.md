@@ -301,11 +301,18 @@ error and the payload, and moving it elsewhere would only lose them.
 attempt reverses the transfer before giving up — `_handle_provider_error` in
 `worker/disburse.py`. If you add a task kind that moves money, do the same.
 
-**One path still breaks that rule, and it is known.** The sweeper dead-letters a
-task whose worker *died* on its last attempt, in SQL, knowing nothing about
-transfers — so `_handle_provider_error` never runs, and the transfer stays
-`pending` with the fund debited. Until that is fixed automatically, a person
-fixes it from the console: the dead-letter queue has a Retry.
+**Two paths park a task without the handler's say**, and reconciliation
+catches both. The sweeper dead-letters a task whose worker *died* on its last
+attempt, in SQL, knowing nothing about transfers; a handler that raises on its
+last attempt is parked by `execute`. Either way `_handle_provider_error` never
+runs and the transfer stays `pending`. The next reconciliation pass sees a
+pending transfer whose send is dead and asks the provider by idempotency key:
+if they have the payment it is followed, and if not it never happened and is
+reversed (`send_abandoned`). It locks the dead task first, so an operator's
+Retry at the same moment waits and then finds the transfer finished.
+
+If you add a task kind that moves money, the handler's own last attempt must
+still settle it: reconciliation is the backstop, not the plan.
 
 **Retry is a judgment, and `dead_letter_service` makes it.** A task about a
 transfer that already settled or was reversed is refused — running it again
@@ -356,8 +363,8 @@ that happen *between* the guarantees — a send whose response we never saw, a
 settlement we stopped polling for, a payment they have and we do not. Those
 leave no error anywhere.
 
-**Heal only where the provider is authoritative and we are merely out of date.
-Where the two records genuinely contradict each other, a person decides.**
+**Heal only where we are merely out of date. Where the two records genuinely
+contradict each other, a person decides.**
 
 | Finding | Meaning | |
 | --- | --- | --- |
@@ -366,13 +373,17 @@ Where the two records genuinely contradict each other, a person decides.**
 | `missing_at_provider` | We believe we sent it, they have no record. | Reported |
 | `unknown_to_us` | A payment matching no transfer. | Reported |
 | `amount_mismatch` | Same payment, different amount. | Reported |
+| `send_abandoned` | Our send gave up without settling the transfer. | **Healed** |
 
 `status_behind` healing is what makes the job worth *running* rather than only
 worth alerting on. `status_contradicted` does not heal because the settlement
 journal has already moved money, and unwinding that on one disagreement is how a
 provider glitch becomes a reversal storm. `missing_at_provider` does not heal
 because our send failing and their record being lost need opposite responses,
-and a machine cannot tell which from here.
+and a machine cannot tell which from here. `send_abandoned` looks similar and
+is not: it has no reference, so the provider never acknowledged the payment,
+and our own queue says no send is coming. Both records agree nothing was paid;
+the books were only behind in saying so.
 
 **A finding is a fact about a moment, not a ticket.** Nothing updates one when
 the problem is fixed. A later pass that still sees it writes another row; one

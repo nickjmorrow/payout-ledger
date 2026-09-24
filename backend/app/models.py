@@ -427,7 +427,7 @@ class ReconciliationFinding(Base):
     __table_args__ = (
         CheckConstraint(
             "kind in ('missing_at_provider', 'unknown_to_us', 'status_behind',"
-            " 'status_contradicted', 'amount_mismatch')",
+            " 'status_contradicted', 'amount_mismatch', 'send_abandoned')",
             name="reconciliation_findings_kind_check",
         ),
         Index("reconciliation_findings_created_idx", desc("created_at")),

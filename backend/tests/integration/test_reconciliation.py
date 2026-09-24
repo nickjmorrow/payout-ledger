@@ -24,6 +24,7 @@ from app.db import SessionFactory
 from app.models import Recipient, ReconciliationFinding, Transfer
 from app.provider.mock import MockProvider
 from app.services import (
+    dead_letter_service,
     ledger_service,
     reconciliation_service,
     task_service,
@@ -151,6 +152,101 @@ async def test_a_failure_we_missed_is_healed_and_returns_the_money(
 
 
 # --------------------------------------------------------------- reporting
+
+
+async def _abandon_send(session, transfer) -> None:
+    """The send's worker dies on its last attempt, and the sweeper gives up on it.
+
+    The sweeper knows nothing about transfers, so this leaves the transfer
+    pending and the fund debited, with no send coming.
+    """
+    (task,) = await task_service.for_transfer(session, transfer_id=transfer.id)
+    await session.execute(
+        text(
+            "update tasks set status='running', attempts=max_attempts,"
+            " claimed_at=now() - interval '1 hour' where id = :id"
+        ),
+        {"id": task.id},
+    )
+    await session.commit()
+    assert await task_service.sweep_stale(session, stale_seconds=60) == 1
+
+
+async def test_a_send_abandoned_before_it_reached_the_provider_is_reversed(
+    session, provider, funded
+):
+    funding, _, recipient = funded
+    transfer = await _transfer(session, recipient)
+    await _abandon_send(session, transfer)
+    assert await ledger_service.balance(session, account_id=funding.id) == FUND - 2_500_00
+
+    report = await reconciliation_service.run(session, provider=provider)
+    await session.commit()
+
+    assert _kinds(report) == ["send_abandoned"]
+    assert report.unresolved == 0
+    await session.refresh(transfer)
+    assert transfer.status == "failed"
+    # The money is available to give away again.
+    assert await ledger_service.balance(session, account_id=funding.id) == FUND
+    assert await ledger_service.trial_balance(session) == 0
+
+
+async def test_a_send_the_provider_accepted_before_the_worker_died_is_followed(
+    session, provider, funded
+):
+    """They have it, so reversing would return money that has already left."""
+    funding, settlement, recipient = funded
+    transfer = await _transfer(session, recipient)
+    await provider.send_payment(
+        idempotency_key=str(transfer.id),
+        msisdn=recipient.msisdn,
+        amount_minor=2_500_00,
+        currency=KES,
+    )
+    await _abandon_send(session, transfer)
+    await provider.advance_pending()
+
+    report = await reconciliation_service.run(session, provider=provider)
+    await session.commit()
+
+    assert _kinds(report) == ["send_abandoned", "status_behind"]
+    assert report.unresolved == 0
+    await session.refresh(transfer)
+    assert transfer.status == "succeeded"
+    assert await ledger_service.balance(session, account_id=funding.id) == FUND - 2_500_00
+    assert await ledger_service.balance(session, account_id=settlement.id) == FUND - 2_500_00
+
+
+async def test_a_send_still_in_flight_is_neither_abandoned_nor_an_orphan(session, provider, funded):
+    """Sent, but the worker has not yet recorded the provider's answer."""
+    _, _, recipient = funded
+    transfer = await _transfer(session, recipient)
+    await provider.send_payment(
+        idempotency_key=str(transfer.id),
+        msisdn=recipient.msisdn,
+        amount_minor=2_500_00,
+        currency=KES,
+    )
+
+    report = await reconciliation_service.run(session, provider=provider)
+
+    assert _kinds(report) == []
+    await session.refresh(transfer)
+    assert transfer.status == "pending"
+
+
+async def test_a_reversed_abandoned_send_cannot_be_retried(session, provider, funded):
+    """Retrying it now would pay someone the books say was not paid."""
+    _, _, recipient = funded
+    transfer = await _transfer(session, recipient)
+    await _abandon_send(session, transfer)
+    await reconciliation_service.run(session, provider=provider)
+    await session.commit()
+
+    (task,) = await task_service.for_transfer(session, transfer_id=transfer.id)
+    with pytest.raises(dead_letter_service.AlreadyFinishedError):
+        await dead_letter_service.retry(session, task_id=task.id)
 
 
 async def test_a_payment_the_provider_has_no_record_of_is_reported_not_healed(

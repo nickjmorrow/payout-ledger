@@ -38,7 +38,8 @@ The domain is small. The failures it survives are not.
   will send it all commit together or not at all.
 - **Retries with exponential backoff and a dead-letter queue**, where exhausting
   the retries reverses the transfer rather than leaving money promised to
-  somebody who will never receive it.
+  somebody who will never receive it — even when the worker dies on its last
+  attempt.
 - **A reconciliation pass** that compares the books against the provider's own
   records and repairs the drift that is safe to repair, flagging the rest for a
   person.

@@ -214,6 +214,25 @@ async def for_transfer(session: AsyncSession, *, transfer_id: uuid.UUID) -> list
     return list(result.scalars())
 
 
+async def dead_letter_for(
+    session: AsyncSession, *, kind: str, transfer_id: uuid.UUID
+) -> Task | None:
+    """The dead-lettered `kind` task about this transfer, locked, or None.
+
+    Locked so a dead-letter retry waits for whatever the caller decides.
+    """
+    result = await session.execute(
+        select(Task)
+        .where(
+            Task.kind == kind,
+            Task.status == "failed",
+            Task.payload["transfer_id"].astext == str(transfer_id),
+        )
+        .with_for_update()
+    )
+    return result.scalars().first()
+
+
 @dataclass(frozen=True)
 class QueueCounts:
     """The queue at a glance.

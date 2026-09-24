@@ -1,8 +1,8 @@
 """Comparing our books against the provider's records, and saying where they differ.
 
-Heal only where the provider is authoritative and we are merely out of date
-(`status_behind`); report everything else for a person to decide. See
-AGENTS.md > Reconciliation for what each kind of finding means.
+Heal only where we are merely out of date (`status_behind`, `send_abandoned`);
+report everything else for a person to decide. See AGENTS.md > Reconciliation
+for what each kind of finding means.
 """
 
 from dataclasses import dataclass, field
@@ -16,7 +16,7 @@ from app.config import settings
 from app.logging import get_logger
 from app.models import ReconciliationFinding, Transfer
 from app.provider.base import PaymentProvider, ProviderPaymentView
-from app.services import transfer_service
+from app.services import task_service, transfer_service
 
 logger = get_logger(__name__)
 
@@ -54,6 +54,8 @@ async def run(
     report = Report()
 
     theirs = {p.reference: p for p in await provider.list_payments(since=since)}
+    # Our idempotency key is the transfer id, which finds a payment we never recorded.
+    theirs_by_key = {p.idempotency_key: p for p in theirs.values()}
     ours = await _our_transfers(session, since=since)
 
     matched: set[str] = set()
@@ -62,7 +64,12 @@ async def run(
         report.checked += 1
 
         if transfer.provider_reference is None:
-            # Not handed over yet, so nothing on their side to disagree with.
+            # Not handed over as far as we know. They may have it anyway, from a
+            # send whose response we have not recorded yet; that is not an orphan.
+            payment = theirs_by_key.get(str(transfer.id))
+            if payment is not None:
+                matched.add(payment.reference)
+            await _recover_if_abandoned(report, session, transfer=transfer, payment=payment)
             continue
 
         payment = theirs.get(transfer.provider_reference)
@@ -195,6 +202,69 @@ async def _compare(
                 "its books show as still available."
             ),
         )
+
+
+async def _recover_if_abandoned(
+    report: Report,
+    session: AsyncSession,
+    *,
+    transfer: Transfer,
+    payment: ProviderPaymentView | None,
+) -> None:
+    """Finish a pending transfer whose send task was dead-lettered.
+
+    Dead-lettered without the handler's say, so nothing reversed it: the sweeper
+    gave up on a worker that died, or the handler raised on its last attempt.
+    No send is coming. If the provider has the payment, follow it; if not, it
+    was never made, and the money goes back to the fund.
+    """
+    if transfer.status != "pending":
+        return
+    task = await task_service.dead_letter_for(
+        session, kind=transfer_service.DISBURSE, transfer_id=transfer.id
+    )
+    if task is None:
+        # Still queued or running: the worker will get to it.
+        return
+
+    if payment is None:
+        finding = _record(
+            report,
+            session,
+            kind="send_abandoned",
+            transfer=transfer,
+            reference=None,
+            detail=(
+                "the send gave up without reversing the transfer, and the provider has "
+                "no record of the payment; reversed, and the money returned to the fund"
+            ),
+        )
+        await transfer_service.mark_failed(
+            session,
+            transfer=transfer,
+            reason="The payment could not be sent, and the provider has no record of it.",
+        )
+    else:
+        finding = _record(
+            report,
+            session,
+            kind="send_abandoned",
+            transfer=transfer,
+            reference=payment.reference,
+            detail=(
+                "the send gave up without recording that the provider had accepted "
+                "the payment; now followed as processing"
+            ),
+        )
+        await transfer_service.mark_processing(
+            session, transfer=transfer, provider_reference=payment.reference
+        )
+    finding.healed = True
+    report.healed += 1
+
+    if payment is not None:
+        # They may have settled it already.
+        await _compare(report, session, transfer=transfer, payment=payment)
 
 
 def _record(
