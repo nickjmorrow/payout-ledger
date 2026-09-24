@@ -2,11 +2,10 @@
 #
 # Every check this repo knows how to run, in one place.
 #
-# One script, two callers, on purpose: you run all of it before you push, and
-# `.githooks/pre-commit` runs the fast subset on the halves you touched. A hook
-# that checks something different from the full run is worse than no hook — it
-# teaches you to trust a green that does not mean anything. There is no hosted
-# CI; the full run is the gate.
+# Three callers, one script, on purpose: you run it by hand, `.githooks/pre-commit`
+# runs it on the halves you touched, and `.github/workflows/ci.yml` runs it in
+# CI. A pre-commit hook that checks something different from CI is worse than no
+# hook — it teaches you to trust a green that does not mean anything.
 #
 #   scripts/check.sh                 everything
 #   scripts/check.sh backend         backend only
@@ -15,7 +14,7 @@
 #
 # --fast drops the two checks that are not a pure function of the source:
 # the pytest integration suite, which needs a Postgres, and `vite build`, which
-# is slow and re-proves what `tsc` just proved. The hook uses it.
+# is slow and re-proves what `tsc` just proved. The hook uses it. CI does not.
 #
 # Failures are collected rather than fatal: one run tells you everything that is
 # wrong, not the first thing.
@@ -59,8 +58,8 @@ note() { printf '\033[2m   %s\033[0m\n' "$1"; }
 # --------------------------------------------------------------- toolchains
 
 # pnpm, however this machine has it. `corepack pnpm` reads the `packageManager`
-# field in frontend/package.json, so it is the SAME pnpm the Dockerfile
-# uses rather than whatever happens to be on PATH.
+# field in frontend/package.json, so it is the SAME pnpm the Dockerfile and CI
+# use rather than whatever happens to be on PATH.
 pnpm_cmd() {
   if command -v pnpm >/dev/null 2>&1; then
     pnpm "$@"
@@ -105,6 +104,12 @@ check_backend() {
     note "skipping the integration suite (--fast)"
   elif database_is_up; then
     step "backend · tests (integration)" uv run pytest tests/integration
+  elif [ "${CHECK_REQUIRE_DB:-0}" = "1" ]; then
+    # CI sets this. Without it, a Postgres service that failed to come up would
+    # make the integration suite quietly skip and the build go green — the
+    # worst possible outcome for the tests that cover the queue and the bus.
+    echo "CHECK_REQUIRE_DB=1 but no database is reachable." >&2
+    FAILED+=("backend · tests (integration) — no database")
   else
     note "no database reachable — skipping the integration suite."
     note "start one with: docker compose up db -d"

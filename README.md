@@ -1,5 +1,7 @@
 # Payout Ledger
 
+[![CI](https://github.com/nickjmorrow/payout-ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/nickjmorrow/payout-ledger/actions/workflows/ci.yml)
+
 A disbursement service for unconditional cash transfers. A program sends money
 to recipients through a payment provider, and the books stay correct while
 that happens — including when the provider times out, a worker dies mid-payment,
@@ -103,8 +105,8 @@ scripts/check.sh           # lint, format, types and tests, both halves
 scripts/check.sh --fast    # the subset the hook runs — no database, no bundle
 ```
 
-One script, two callers: you, before a push, and the pre-commit hook. There is
-no hosted CI; the full run is the gate.
+One script, three callers: you, the pre-commit hook, and CI. A hook that checks
+something different from CI is worse than no hook.
 
 Most of the test suite needs a real Postgres, deliberately: `FOR UPDATE SKIP
 LOCKED` means nothing without concurrent transactions, a deferred trigger means
